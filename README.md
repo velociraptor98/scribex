@@ -6,11 +6,17 @@ typesetting engine — no TeX Live installation, no server.
 
 ## Status
 
-Working end to end: edit, live rebuild on a 600 ms debounce, PDF preview,
-section outline, and TeX log diagnostics that jump to the offending line.
-Typical rebuild is ~700 ms (debug build) once resources are cached.
+Working end to end: open, edit, save (⌘S) and save-as (⇧⌘S), export PDF (⌘E),
+live rebuild on a 600 ms debounce, PDF preview, section outline, and TeX log
+diagnostics that jump to the offending line. Typical rebuild is ~700 ms (debug
+build) once resources are cached.
 
-Not yet built: SyncTeX, multi-file projects, save-as, a shipped resource bundle.
+**Preview never writes to your document.** The engine typesets the editor
+buffer from memory, so the file on disk changes only when you save. Multi-file
+projects still resolve — `\input` and `\includegraphics` are looked up relative
+to the document's real directory.
+
+Not yet built: SyncTeX, a project/file tree, a shipped resource bundle.
 
 ## Running
 
@@ -37,7 +43,7 @@ why, and covers the two non-obvious constraints this design is built around.
 |---|---|
 | `src-tauri/src/engine.rs` | Tectonic driver. **Worker process only** — see docs |
 | `src-tauri/src/worker.rs` | Crash isolation: re-exec + JSON over stdio |
-| `src-tauri/src/lib.rs` | Tauri commands, offline toggle |
+| `src-tauri/src/lib.rs` | Tauri commands: compile, save, export, offline toggle |
 | `src/Editor.tsx` | CodeMirror 6, LaTeX mode, completion |
 | `src/PdfView.tsx` | PDF.js canvas renderer, scroll-preserving |
 | `src/texlog.ts` | TeX log → diagnostics |

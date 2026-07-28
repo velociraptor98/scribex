@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { readTextFile, mkdir } from "@tauri-apps/plugin-fs";
 import { appLocalDataDir } from "@tauri-apps/api/path";
 import Editor from "./Editor";
@@ -44,6 +44,12 @@ export default function App() {
   const [zoom, setZoom] = useState(1.3);
   const [goto, setGoto] = useState<number | undefined>();
   const [autoBuild, setAutoBuild] = useState(true);
+  // Bumped whenever a document is loaded from disk, to tell the editor to
+  // replace its contents rather than keep the one the user was editing.
+  const [docKey, setDocKey] = useState(0);
+  // Unsaved-changes tracking. The preview compiles the buffer directly, so the
+  // file on disk only changes when the user asks for it.
+  const [dirty, setDirty] = useState(false);
 
   // Scratch file used until the user opens or saves a real document.
   const scratchPath = useRef<string | null>(null);
@@ -94,6 +100,34 @@ export default function App() {
     })();
   }, []);
 
+  // Keyboard shortcuts. Held in a ref so the listener always calls the current
+  // closure without rebinding on every keystroke.
+  const actions = useRef({ saveFile, exportPdf });
+  actions.current = { saveFile, exportPdf };
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const k = e.key.toLowerCase();
+      if (k === "s") {
+        e.preventDefault();
+        actions.current.saveFile(e.shiftKey); // ⇧ forces Save As
+      } else if (k === "e") {
+        e.preventDefault();
+        actions.current.exportPdf();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Warn before discarding unsaved work.
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
   // Debounced live rebuild.
   useEffect(() => {
     if (!autoBuild) return;
@@ -107,7 +141,53 @@ export default function App() {
     const text = await readTextFile(picked);
     setPath(picked);
     setSource(text);
+    setDocKey((k) => k + 1);
+    setDiags([]);
+    setMissing(null);
+    setDirty(false);
     setStatus(`Opened ${picked.split("/").pop()}`);
+  }
+
+  /// Write the buffer to disk, prompting for a location if there isn't one yet.
+  async function saveFile(forceDialog = false) {
+    let target = path;
+    if (!target || forceDialog) {
+      const picked = await save({
+        defaultPath: target ?? "untitled.tex",
+        filters: [{ name: "LaTeX", extensions: ["tex"] }],
+      });
+      if (typeof picked !== "string") return;
+      target = picked;
+    }
+    try {
+      await invoke("save_document", { path: target, source });
+      // Adopting the new path also moves where future builds are rooted.
+      if (target !== path) setPath(target);
+      setDirty(false);
+      setStatus(`Saved ${target.split("/").pop()}`);
+    } catch (e) {
+      setStatus(`Save failed: ${e}`);
+    }
+  }
+
+  async function exportPdf() {
+    const base = (path ?? "untitled.tex").split("/").pop()!.replace(/\.tex$/i, "");
+    const dest = await save({
+      defaultPath: `${base}.pdf`,
+      filters: [{ name: "PDF", extensions: ["pdf"] }],
+    });
+    if (typeof dest !== "string") return;
+    try {
+      // Copies the last successful build, so exporting never depends on the
+      // buffer compiling cleanly right now.
+      const bytes = await invoke<number>("export_pdf", {
+        path: path ?? scratchPath.current,
+        dest,
+      });
+      setStatus(`Exported ${(bytes / 1024).toFixed(0)} KB to ${dest.split("/").pop()}`);
+    } catch (e) {
+      setStatus(`Export failed: ${e}`);
+    }
   }
 
   // One-time download of the common package/font set so that everyday editing
@@ -128,6 +208,11 @@ export default function App() {
     }
   }
 
+  function edit(next: string) {
+    setSource(next);
+    setDirty(true);
+  }
+
   async function toggleOffline() {
     const next = !offline;
     setOffline(next);
@@ -142,6 +227,12 @@ export default function App() {
       <header className="bar">
         <strong>ScribeX</strong>
         <button onClick={openFile}>Open…</button>
+        <button onClick={() => saveFile()} disabled={!dirty && !!path} title="⌘S">
+          Save
+        </button>
+        <button onClick={exportPdf} disabled={!pdf} title="⌘E">
+          Export PDF…
+        </button>
         <button onClick={() => build(source)} disabled={busy}>Build</button>
         <label className="chk">
           <input type="checkbox" checked={autoBuild} onChange={(e) => setAutoBuild(e.target.checked)} />
@@ -185,7 +276,7 @@ export default function App() {
         </nav>
 
         <section className="pane">
-          <Editor initial={source} onChange={setSource} gotoLine={goto} />
+          <Editor doc={source} docKey={docKey} onChange={edit} gotoLine={goto} />
         </section>
 
         <section className="pane">
@@ -194,6 +285,10 @@ export default function App() {
       </div>
 
       <footer className="status">
+        <span className="doc" title={path ?? "Unsaved scratch document"}>
+          {path ? path.split("/").pop() : "untitled.tex"}
+          {dirty && <span className="dot" title="Unsaved changes"> ●</span>}
+        </span>
         <span className={busy ? "pulse" : ""}>{status}</span>
         <span className="spacer" />
         {errors.length > 0 && <span className="err">{errors.length} error{errors.length > 1 ? "s" : ""}</span>}

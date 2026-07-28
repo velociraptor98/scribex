@@ -70,10 +70,20 @@ fn missing_file_from_log(log: &str) -> Option<String> {
     None
 }
 
-/// Typeset `entry` (a .tex path) with its directory as the filesystem root.
+/// Typeset `source` as if it were the file at `entry`, without touching that
+/// file. The editor buffer is fed to the engine directly, so live preview never
+/// writes to the user's document — saving is always explicit.
+///
+/// `entry`'s directory is still the filesystem root, so `\input`,
+/// `\includegraphics` and friends resolve against the real project on disk.
 /// Intermediates and the PDF land in `out_dir`, which is kept between runs so
 /// aux/toc files survive and multi-pass documents converge.
-pub fn compile(entry: &Path, out_dir: &Path, only_cached: bool) -> Result<CompileOk, CompileErr> {
+pub fn compile(
+    entry: &Path,
+    source: &str,
+    out_dir: &Path,
+    only_cached: bool,
+) -> Result<CompileOk, CompileErr> {
     let started = std::time::Instant::now();
     let ms = |t: std::time::Instant| t.elapsed().as_millis() as u64;
 
@@ -106,7 +116,7 @@ pub fn compile(entry: &Path, out_dir: &Path, only_cached: bool) -> Result<Compil
 
     let mut sb = ProcessingSessionBuilder::default();
     sb.bundle(bundle)
-        .primary_input_path(entry)
+        .primary_input_buffer(source.as_bytes())
         .tex_input_name(name)
         .format_name("latex")
         .format_cache_path(fmt_cache)

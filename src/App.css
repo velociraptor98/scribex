@@ -173,3 +173,6 @@ button:disabled { opacity: 0.5; cursor: default; }
 .diag.warning .sev { color: var(--warn); }
 .diag .ln { color: var(--muted); width: 40px; flex: 0 0 auto; }
 .diag .msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.status .doc { color: var(--text); }
+.status .dot { color: var(--accent); }

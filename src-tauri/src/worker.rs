@@ -16,7 +16,11 @@ pub const FLAG: &str = "--typeset";
 
 #[derive(Serialize, Deserialize)]
 pub struct Request {
+    /// Where the document lives (or would live). Used for the filesystem root
+    /// and job name only — the file itself is never read or written.
     pub entry: PathBuf,
+    /// The editor buffer to typeset, which may differ from what is on disk.
+    pub source: String,
     pub out_dir: PathBuf,
     pub only_cached: bool,
 }
@@ -40,7 +44,12 @@ pub enum Response {
 /// has to survive a round trip through JSON.
 pub fn main() -> ! {
     let resp = match serde_json::from_reader::<_, Request>(std::io::stdin()) {
-        Ok(req) => match crate::engine::compile(&req.entry, &req.out_dir, req.only_cached) {
+        Ok(req) => match crate::engine::compile(
+            &req.entry,
+            &req.source,
+            &req.out_dir,
+            req.only_cached,
+        ) {
             Ok(ok) => Response::Ok { log: ok.log, duration_ms: ok.duration_ms },
             Err(e) => Response::Err {
                 message: e.message,
