@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { confirm, open, save } from "@tauri-apps/plugin-dialog";
 import { readTextFile, mkdir } from "@tauri-apps/plugin-fs";
 import { appLocalDataDir } from "@tauri-apps/api/path";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import Editor from "./Editor";
 import PdfView from "./PdfView";
 import { outline } from "./latex";
@@ -10,7 +11,14 @@ import { parseLog, Diagnostic } from "./texlog";
 import "./App.css";
 
 interface CompileOk { pdf: number[]; log: string; duration_ms: number }
-interface CompileErr { message: string; log: string; missing_file: string | null; duration_ms: number }
+interface CompileErr {
+  message: string;
+  log: string;
+  missing_file: string | null;
+  duration_ms: number;
+  /** A newer build replaced this one before it ran. Not a failure to report. */
+  superseded?: boolean;
+}
 
 const SAMPLE = `\\documentclass{article}
 \\title{ScribeX}
@@ -77,8 +85,10 @@ export default function App() {
         setMissing(null);
         setStatus(`Built in ${r.duration_ms} ms`);
       } catch (e) {
-        if (mine !== seq.current) return;
         const err = e as CompileErr;
+        // The backend runs one job at a time and drops those a newer request
+        // has overtaken. Leave the status alone — the newer build owns it now.
+        if (err.superseded || mine !== seq.current) return;
         setDiags(parseLog(err.log ?? ""));
         setMissing(err.missing_file ?? null);
         setStatus(err.missing_file ? `Missing package: ${err.missing_file}` : "Build failed");
@@ -120,13 +130,29 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Warn before discarding unsaved work.
+  // Confirm before discarding unsaved work.
+  //
+  // `beforeunload` does not stop a native window close in a Tauri webview — no
+  // dialog appears and the edits are simply gone — so the guard hangs off
+  // Tauri's own close-requested event. Once a listener is registered Tauri
+  // holds the close and destroys the window only if the handler lets it, so
+  // cancelling means calling preventDefault. ⌘Q arrives here too; see
+  // `build_menu` in lib.rs for why that needs help.
+  const unsaved = useRef({ dirty, name: "untitled.tex" });
+  unsaved.current = { dirty, name: path?.split("/").pop() ?? "untitled.tex" };
   useEffect(() => {
-    if (!dirty) return;
-    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty]);
+    const pending = getCurrentWindow().onCloseRequested(async (e) => {
+      if (!unsaved.current.dirty) return;
+      const discard = await confirm(
+        `"${unsaved.current.name}" has unsaved changes. They will be lost.`,
+        { title: "Close without saving?", kind: "warning", okLabel: "Discard", cancelLabel: "Cancel" }
+      );
+      if (!discard) e.preventDefault();
+    });
+    return () => {
+      pending.then((unlisten) => unlisten());
+    };
+  }, []);
 
   // Debounced live rebuild.
   useEffect(() => {
@@ -202,6 +228,7 @@ export default function App() {
       setMissing(null);
       await build(source);
     } catch (e) {
+      // Priming is never dropped as superseded, so anything caught here is real.
       setStatus(`Priming failed: ${(e as CompileErr).message ?? e}`);
     } finally {
       setBusy(false);

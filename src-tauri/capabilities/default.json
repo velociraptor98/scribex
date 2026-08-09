@@ -8,6 +8,8 @@
     "opener:default",
     "dialog:allow-open",
     "dialog:allow-save",
+    "dialog:allow-confirm",
+    "core:window:allow-destroy",
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",
     "fs:allow-mkdir",
