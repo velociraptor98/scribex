@@ -66,3 +66,39 @@ export function outline(source: string): OutlineEntry[] {
   });
   return out;
 }
+
+/** The tally under the Contents panel. Counted from the source, not the log,
+ *  so it stays honest while a build is failing. */
+export interface DocStats {
+  sections: number;
+  equations: number;
+  citations: number;
+}
+
+// Display maths only — inline $…$ is prose, not a numbered equation.
+const EQUATION_ENVS = /\\begin\{(equation|align|gather|multline|eqnarray|displaymath)\*?\}/g;
+const CITE_KEYS = /\\(?:cite|citep|citet|citeauthor|citeyear|parencite|textcite)\s*(?:\[[^\]]*\])*\{([^}]*)\}/g;
+
+export function stats(source: string): DocStats {
+  const keys = new Set<string>();
+  for (const m of source.matchAll(CITE_KEYS)) {
+    for (const k of m[1].split(",")) {
+      const key = k.trim();
+      if (key) keys.add(key);
+    }
+  }
+  return {
+    sections: outline(source).length,
+    equations: [...source.matchAll(EQUATION_ENVS)].length,
+    // Distinct works cited, not \cite calls — citing one paper twice is one
+    // entry in the bibliography.
+    citations: keys.size,
+  };
+}
+
+/** Bibliography keys defined in a .bib file, for resolving citation typos. */
+const BIB_ENTRY = /@\w+\s*\{\s*([^,\s}]+)/g;
+
+export function bibKeys(bib: string): string[] {
+  return [...bib.matchAll(BIB_ENTRY)].map((m) => m[1]);
+}

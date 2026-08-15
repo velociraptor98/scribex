@@ -1,13 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { confirm, open, save } from "@tauri-apps/plugin-dialog";
-import { readTextFile, mkdir } from "@tauri-apps/plugin-fs";
+import { readTextFile, writeTextFile, mkdir } from "@tauri-apps/plugin-fs";
 import { appLocalDataDir } from "@tauri-apps/api/path";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import Editor from "./Editor";
+
+import Editor, { EditorHandle } from "./Editor";
 import PdfView from "./PdfView";
-import { outline } from "./latex";
-import { parseLog, Diagnostic } from "./texlog";
+import TitleBar from "./TitleBar";
+import Welcome from "./Welcome";
+import Palette, { AppCommand } from "./Palette";
+import ExportSheet from "./ExportSheet";
+import { Marks, PressLog } from "./Marks";
+
+import { bibKeys, outline, stats } from "./latex";
+import { Diagnostic, Fix, PressRow, parseLog, pressLog } from "./texlog";
+import { ARTICLE, Plate } from "./templates";
+import { RecentDoc, documentTitle, loadRecent, remember } from "./recent";
+import { ExportOptions, applyOptions, needsRebuild, sheetOf } from "./exporting";
+import { CARET, selectionToTable } from "./commands";
 import "./App.css";
 
 interface CompileOk { pdf: number[]; log: string; duration_ms: number }
@@ -20,50 +31,64 @@ interface CompileErr {
   superseded?: boolean;
 }
 
-const SAMPLE = `\\documentclass{article}
-\\title{ScribeX}
-\\author{}
-\\date{}
-\\begin{document}
-\\maketitle
-
-\\section{Offline by default}
-This document was typeset locally by Tectonic, with no network access.
-
-\\section{Mathematics}
-\\begin{equation}
-  \\int_{-\\infty}^{\\infty} e^{-x^2}\\,dx = \\sqrt{\\pi}
-\\end{equation}
-
-\\end{document}
-`;
-
 const DEBOUNCE_MS = 600;
 
+type Screen = "welcome" | "editor";
+type RightPane = "proof" | "marks";
+
 export default function App() {
-  const [source, setSource] = useState(SAMPLE);
+  const [screen, setScreen] = useState<Screen>("welcome");
+  const [source, setSource] = useState(ARTICLE);
   const [path, setPath] = useState<string | null>(null);
   const [pdf, setPdf] = useState<Uint8Array | null>(null);
   const [diags, setDiags] = useState<Diagnostic[]>([]);
+  const [press, setPress] = useState<PressRow[]>([]);
   const [status, setStatus] = useState("Ready");
   const [busy, setBusy] = useState(false);
   const [offline, setOffline] = useState(true);
   const [missing, setMissing] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1.3);
-  const [goto, setGoto] = useState<number | undefined>();
   const [autoBuild, setAutoBuild] = useState(true);
-  // Bumped whenever a document is loaded from disk, to tell the editor to
-  // replace its contents rather than keep the one the user was editing.
   const [docKey, setDocKey] = useState(0);
-  // Unsaved-changes tracking. The preview compiles the buffer directly, so the
-  // file on disk only changes when the user asks for it.
   const [dirty, setDirty] = useState(false);
+  const [buildMs, setBuildMs] = useState<number | undefined>();
 
+  const [recent, setRecent] = useState<RecentDoc[]>(loadRecent);
+  const [rightPane, setRightPane] = useState<RightPane>("proof");
+  const [pages, setPages] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pressOpen, setPressOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [selection, setSelection] = useState("");
+  /** Marks the reader has waved through; cleared on every new build. */
+  const [ignored, setIgnored] = useState<string[]>([]);
+  const [keys, setKeys] = useState<{ keys: string[]; name?: string }>({ keys: [] });
+
+  const editor = useRef<EditorHandle>(null);
   // Scratch file used until the user opens or saves a real document.
   const scratchPath = useRef<string | null>(null);
   const seq = useRef(0);
+  // The source that produced the PDF on screen, so the export sheet knows
+  // whether the paper size it shows is the one that was actually set.
+  const built = useRef<string>("");
 
   const sections = useMemo(() => outline(source), [source]);
+  // Indent relative to the shallowest heading present, so an article whose
+  // top level is \section is not pushed in by the two levels (part, chapter)
+  // it never uses — the margin is only 186px wide.
+  const baseLevel = useMemo(
+    () => (sections.length ? Math.min(...sections.map((s) => s.level)) : 0),
+    [sections]
+  );
+  const tally = useMemo(() => stats(source), [source]);
+  const name = path?.split("/").pop() ?? "untitled.tex";
+  const visible = useMemo(
+    () => diags.filter((d) => !ignored.includes(markKey(d))),
+    [diags, ignored]
+  );
+
+  /* ── building ─────────────────────────────────────────────────────────── */
 
   const build = useCallback(
     async (src: string, allowNetwork = false) => {
@@ -80,98 +105,128 @@ export default function App() {
           allowNetwork: allowNetwork || undefined,
         });
         if (mine !== seq.current) return; // a newer build superseded this one
+        const parsed = parseLog(r.log, { source: src, bibKeys: keys.keys, bibName: keys.name });
         setPdf(new Uint8Array(r.pdf));
-        setDiags(parseLog(r.log));
+        setDiags(parsed);
+        setPress(pressLog(r.log, { source: src, name, diags: parsed }));
+        setIgnored([]);
         setMissing(null);
-        setStatus(`Built in ${r.duration_ms} ms`);
+        setBuildMs(r.duration_ms);
+        built.current = src;
+        setStatus(`Set in ${r.duration_ms} ms`);
       } catch (e) {
         const err = e as CompileErr;
         // The backend runs one job at a time and drops those a newer request
         // has overtaken. Leave the status alone — the newer build owns it now.
         if (err.superseded || mine !== seq.current) return;
-        setDiags(parseLog(err.log ?? ""));
+        const parsed = parseLog(err.log ?? "", {
+          source: src, bibKeys: keys.keys, bibName: keys.name,
+        });
+        setDiags(parsed);
+        setPress(pressLog(err.log ?? "", { source: src, name, diags: parsed }));
+        setIgnored([]);
         setMissing(err.missing_file ?? null);
-        setStatus(err.missing_file ? `Missing package: ${err.missing_file}` : "Build failed");
+        setBuildMs(err.duration_ms);
+        setStatus(err.missing_file ? `Missing: ${err.missing_file}` : "Did not set");
+        // A failed build leaves a stale proof on screen; the marks are the news.
+        if (parsed.length > 0) setRightPane("marks");
       } finally {
         if (mine === seq.current) setBusy(false);
       }
     },
-    [path]
+    [path, keys, name]
   );
 
-  // Resolve a scratch path once, then do the initial build.
+  // Resolve a scratch path once, before anything can ask for a build.
   useEffect(() => {
     (async () => {
       const dir = await appLocalDataDir();
       await mkdir(dir, { recursive: true }).catch(() => {});
       scratchPath.current = `${dir}/scratch.tex`;
       await invoke("set_offline", { offline: true });
-      build(SAMPLE);
     })();
   }, []);
 
-  // Keyboard shortcuts. Held in a ref so the listener always calls the current
-  // closure without rebinding on every keystroke.
-  const actions = useRef({ saveFile, exportPdf });
-  actions.current = { saveFile, exportPdf };
+  // Debounced live rebuild, once a document is on screen.
   useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (!(e.metaKey || e.ctrlKey)) return;
-      const k = e.key.toLowerCase();
-      if (k === "s") {
-        e.preventDefault();
-        actions.current.saveFile(e.shiftKey); // ⇧ forces Save As
-      } else if (k === "e") {
-        e.preventDefault();
-        actions.current.exportPdf();
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
-  // Confirm before discarding unsaved work.
-  //
-  // `beforeunload` does not stop a native window close in a Tauri webview — no
-  // dialog appears and the edits are simply gone — so the guard hangs off
-  // Tauri's own close-requested event. Once a listener is registered Tauri
-  // holds the close and destroys the window only if the handler lets it, so
-  // cancelling means calling preventDefault. ⌘Q arrives here too; see
-  // `build_menu` in lib.rs for why that needs help.
-  const unsaved = useRef({ dirty, name: "untitled.tex" });
-  unsaved.current = { dirty, name: path?.split("/").pop() ?? "untitled.tex" };
-  useEffect(() => {
-    const pending = getCurrentWindow().onCloseRequested(async (e) => {
-      if (!unsaved.current.dirty) return;
-      const discard = await confirm(
-        `"${unsaved.current.name}" has unsaved changes. They will be lost.`,
-        { title: "Close without saving?", kind: "warning", okLabel: "Discard", cancelLabel: "Cancel" }
-      );
-      if (!discard) e.preventDefault();
-    });
-    return () => {
-      pending.then((unlisten) => unlisten());
-    };
-  }, []);
-
-  // Debounced live rebuild.
-  useEffect(() => {
-    if (!autoBuild) return;
+    if (screen !== "editor" || !autoBuild) return;
     const t = setTimeout(() => build(source), DEBOUNCE_MS);
     return () => clearTimeout(t);
-  }, [source, autoBuild, build]);
+  }, [source, autoBuild, build, screen]);
+
+  /** Bibliography keys, so an undefined citation can propose the right one. */
+  const loadBib = useCallback(async (src: string, docPath: string | null) => {
+    const dir = docPath?.split("/").slice(0, -1).join("/");
+    if (!dir) return setKeys({ keys: [] });
+    const named = [
+      ...src.matchAll(/\\(?:bibliography|addbibresource)\s*\{([^}]+)\}/g),
+    ].flatMap((m) => m[1].split(",").map((s) => s.trim()));
+    const files = named.map((f) => (f.endsWith(".bib") ? f : `${f}.bib`));
+
+    const all: string[] = [];
+    let first: string | undefined;
+    for (const f of files) {
+      try {
+        const text = await readTextFile(`${dir}/${f}`);
+        const ks = bibKeys(text);
+        if (ks.length && !first) first = f;
+        all.push(...ks);
+      } catch {
+        // A missing .bib is itself a build error; nothing to add here.
+      }
+    }
+    setKeys({ keys: all, name: first });
+  }, []);
+
+  /* ── documents ────────────────────────────────────────────────────────── */
+
+  const adopt = useCallback(
+    (text: string, docPath: string | null, note: string) => {
+      setSource(text);
+      setPath(docPath);
+      setDocKey((k) => k + 1);
+      setDiags([]);
+      setPress([]);
+      setIgnored([]);
+      setMissing(null);
+      setDirty(false);
+      setPdf(null);
+      setPages(0);
+      setPage(1);
+      setRightPane("proof");
+      setScreen("editor");
+      setStatus(note);
+      loadBib(text, docPath);
+      if (docPath) {
+        setRecent(remember({
+          path: docPath,
+          title: documentTitle(text, docPath),
+          sections: outline(text).length,
+          citations: stats(text).citations,
+        }));
+      }
+    },
+    [loadBib]
+  );
 
   async function openFile() {
     const picked = await open({ filters: [{ name: "LaTeX", extensions: ["tex"] }] });
     if (typeof picked !== "string") return;
-    const text = await readTextFile(picked);
-    setPath(picked);
-    setSource(text);
-    setDocKey((k) => k + 1);
-    setDiags([]);
-    setMissing(null);
-    setDirty(false);
-    setStatus(`Opened ${picked.split("/").pop()}`);
+    try {
+      const text = await readTextFile(picked);
+      adopt(text, picked, `Opened ${picked.split("/").pop()}`);
+    } catch (e) {
+      setStatus(`Cannot open: ${e}`);
+    }
+  }
+
+  async function openRecent(doc: RecentDoc) {
+    try {
+      const text = await readTextFile(doc.path);
+      adopt(text, doc.path, `Opened ${doc.path.split("/").pop()}`);
+    } catch {
+      setStatus(`${doc.path.split("/").pop()} has moved or been deleted`);
+    }
   }
 
   /// Write the buffer to disk, prompting for a location if there isn't one yet.
@@ -188,31 +243,65 @@ export default function App() {
     try {
       await invoke("save_document", { path: target, source });
       // Adopting the new path also moves where future builds are rooted.
-      if (target !== path) setPath(target);
+      if (target !== path) {
+        setPath(target);
+        loadBib(source, target);
+      }
       setDirty(false);
       setStatus(`Saved ${target.split("/").pop()}`);
+      setRecent(remember({
+        path: target,
+        title: documentTitle(source, target),
+        sections: sections.length,
+        citations: tally.citations,
+      }));
     } catch (e) {
       setStatus(`Save failed: ${e}`);
     }
   }
 
-  async function exportPdf() {
-    const base = (path ?? "untitled.tex").split("/").pop()!.replace(/\.tex$/i, "");
+  /** Export honouring the imprint sheet. Options that change the document are
+   *  applied to a throwaway build; the buffer and the file are left alone. */
+  async function runExport(opts: ExportOptions) {
+    const target = path ?? scratchPath.current;
+    if (!target) return;
+    const stem = name.replace(/\.tex$/i, "");
     const dest = await save({
-      defaultPath: `${base}.pdf`,
+      defaultPath: `${stem}.pdf`,
       filters: [{ name: "PDF", extensions: ["pdf"] }],
     });
     if (typeof dest !== "string") return;
+
+    setExportOpen(false);
+    setBusy(true);
     try {
-      // Copies the last successful build, so exporting never depends on the
-      // buffer compiling cleanly right now.
-      const bytes = await invoke<number>("export_pdf", {
-        path: path ?? scratchPath.current,
-        dest,
-      });
-      setStatus(`Exported ${(bytes / 1024).toFixed(0)} KB to ${dest.split("/").pop()}`);
+      if (needsRebuild(opts, sheetOf(source))) {
+        setStatus("Setting for export…");
+        // Bypass `build` so the on-screen proof is not replaced by the variant.
+        seq.current++;
+        await invoke<CompileOk>("compile_latex", {
+          path: target,
+          source: applyOptions(source, opts),
+        });
+      }
+
+      const bytes = await invoke<number>("export_pdf", { path: target, dest });
+
+      if (opts.sourceAlongside) {
+        const beside = dest.replace(/\.pdf$/i, ".tex");
+        await writeTextFile(beside, source);
+      }
+
+      setStatus(
+        `Exported ${(bytes / 1024).toFixed(0)} KB to ${dest.split("/").pop()}` +
+        (opts.sourceAlongside ? " (with source)" : "")
+      );
     } catch (e) {
-      setStatus(`Export failed: ${e}`);
+      setStatus(`Export failed: ${(e as CompileErr).message ?? e}`);
+    } finally {
+      setBusy(false);
+      // Restore the proof, which the export build may have overwritten on disk.
+      if (needsRebuild(opts, sheetOf(source))) build(source);
     }
   }
 
@@ -235,105 +324,263 @@ export default function App() {
     }
   }
 
-  function edit(next: string) {
-    setSource(next);
-    setDirty(true);
-  }
-
   async function toggleOffline() {
     const next = !offline;
     setOffline(next);
     await invoke("set_offline", { offline: next });
   }
 
-  const errors = diags.filter((d) => d.severity === "error");
-  const warnings = diags.filter((d) => d.severity === "warning");
+  function edit(next: string) {
+    setSource(next);
+    setDirty(true);
+  }
+
+  function applyFix(fix: Fix) {
+    editor.current?.replaceOnLine(fix.line, fix.find, fix.replace);
+    setStatus(fix.label);
+  }
+
+  function insert(text: string) {
+    // "Turn the selection into a table" is the one suggestion whose output
+    // depends on what is selected, so it is built here rather than in the
+    // catalogue.
+    if (text === "" && selection) {
+      const table = selectionToTable(selection);
+      if (table) return editor.current?.insert(table);
+      setStatus("That selection is not rows of separated values");
+      return;
+    }
+    editor.current?.insert(text);
+  }
+
+  /* ── commands ─────────────────────────────────────────────────────────── */
+
+  const commands = useMemo<AppCommand[]>(() => [
+    { id: "save", title: "Save", hint: "⌘S", words: ["write", "disk"], run: () => saveFile(), disabled: !dirty && !!path },
+    { id: "saveas", title: "Save as…", hint: "⇧⌘S", words: ["copy", "rename"], run: () => saveFile(true) },
+    { id: "export", title: "Export PDF…", hint: "⌘E", words: ["imprint", "pdf", "print"], run: () => setExportOpen(true), disabled: !pdf },
+    { id: "open", title: "Open…", hint: "⌘O", words: ["file", "document"], run: openFile },
+    { id: "new", title: "New document", hint: "⌘N", words: ["blank", "start"], run: () => adopt(ARTICLE, null, "New document") },
+    { id: "build", title: "Set now", hint: "⌘R", words: ["build", "compile", "typeset", "rebuild"], run: () => build(source), disabled: busy },
+    { id: "live", title: autoBuild ? "Stop setting as I type" : "Set as I type", words: ["live", "auto", "rebuild", "debounce"], run: () => setAutoBuild((v) => !v) },
+    { id: "offline", title: offline ? "Allow the network" : "Refuse the network", words: ["offline", "online", "cache"], run: toggleOffline },
+    { id: "zoomin", title: "Enlarge the proof", hint: "⌘+", words: ["zoom", "bigger"], run: () => setZoom((z) => Math.min(3, z + 0.15)) },
+    { id: "zoomout", title: "Reduce the proof", hint: "⌘−", words: ["zoom", "smaller"], run: () => setZoom((z) => Math.max(0.5, z - 0.15)) },
+    { id: "marks", title: "Show the marks", words: ["errors", "warnings", "problems", "proof"], run: () => setRightPane("marks"), disabled: visible.length === 0 },
+    { id: "presslog", title: pressOpen ? "Hide the press log" : "Show the press log", words: ["log", "tex", "passes"], run: () => setPressOpen((v) => !v) },
+    { id: "welcome", title: "Back to the title page", words: ["welcome", "home", "recent"], run: () => setScreen("welcome") },
+    { id: "prime", title: "Prime the offline cache", words: ["download", "packages", "fonts"], run: primeCache, disabled: busy },
+  ], [dirty, path, pdf, busy, autoBuild, offline, source, visible.length, pressOpen, adopt, build]);
+
+  // Keyboard shortcuts. Held in a ref so the listener always calls the current
+  // closure without rebinding on every keystroke.
+  const hotkeys = useRef({ saveFile, setExportOpen, build, source, pdf, screen, adopt, openFile });
+  hotkeys.current = { saveFile, setExportOpen, build, source, pdf, screen, adopt, openFile };
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const h = hotkeys.current;
+      const k = e.key.toLowerCase();
+
+      if (k === "k") { e.preventDefault(); setPaletteOpen((v) => !v); return; }
+      if (k === "o") { e.preventDefault(); h.openFile(); return; }
+      if (k === "n") { e.preventDefault(); h.adopt(ARTICLE, null, "New document"); return; }
+      if (h.screen !== "editor") return;
+
+      if (k === "s") { e.preventDefault(); h.saveFile(e.shiftKey); }        // ⇧ forces Save As
+      else if (k === "e") { e.preventDefault(); if (h.pdf) h.setExportOpen(true); }
+      else if (k === "r") { e.preventDefault(); h.build(h.source); }
+      else if (k === "b") { e.preventDefault(); insert(`\\textbf{${CARET}}`); }
+      else if (k === "i") { e.preventDefault(); insert(`\\emph{${CARET}}`); }
+      else if (k === "=" || k === "+") { e.preventDefault(); setZoom((z) => Math.min(3, z + 0.15)); }
+      else if (k === "-") { e.preventDefault(); setZoom((z) => Math.max(0.5, z - 0.15)); }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Confirm before discarding unsaved work.
+  //
+  // `beforeunload` does not stop a native window close in a Tauri webview — no
+  // dialog appears and the edits are simply gone — so the guard hangs off
+  // Tauri's own close-requested event. Once a listener is registered Tauri
+  // holds the close and destroys the window only if the handler lets it, so
+  // cancelling means calling preventDefault. ⌘Q arrives here too; see
+  // `build_menu` in lib.rs for why that needs help.
+  const unsaved = useRef({ dirty, name });
+  unsaved.current = { dirty, name };
+  useEffect(() => {
+    const pending = getCurrentWindow().onCloseRequested(async (e) => {
+      if (!unsaved.current.dirty) return;
+      const discard = await confirm(
+        `"${unsaved.current.name}" has unsaved changes. They will be lost.`,
+        { title: "Close without saving?", kind: "warning", okLabel: "Discard", cancelLabel: "Cancel" }
+      );
+      if (!discard) e.preventDefault();
+    });
+    return () => { pending.then((unlisten) => unlisten()); };
+  }, []);
+
+  /* ── render ───────────────────────────────────────────────────────────── */
+
+  const palette = paletteOpen && (
+    <Palette
+      commands={commands}
+      hasSelection={selection.length > 0}
+      onInsert={insert}
+      onClose={() => { setPaletteOpen(false); editor.current?.focus(); }}
+    />
+  );
+
+  if (screen === "welcome") {
+    return (
+      <>
+        <Welcome
+          recent={recent}
+          onNew={() => adopt(ARTICLE, null, "New document")}
+          onOpen={openFile}
+          onOpenRecent={openRecent}
+          onPlate={(p: Plate) => adopt(p.source, null, `${p.name} plate`)}
+          onSearch={() => setPaletteOpen(true)}
+        />
+        {palette}
+      </>
+    );
+  }
 
   return (
-    <div className="app">
-      <header className="bar">
-        <strong>ScribeX</strong>
-        <button onClick={openFile}>Open…</button>
-        <button onClick={() => saveFile()} disabled={!dirty && !!path} title="⌘S">
-          Save
-        </button>
-        <button onClick={exportPdf} disabled={!pdf} title="⌘E">
-          Export PDF…
-        </button>
-        <button onClick={() => build(source)} disabled={busy}>Build</button>
-        <label className="chk">
-          <input type="checkbox" checked={autoBuild} onChange={(e) => setAutoBuild(e.target.checked)} />
-          Live
-        </label>
-        <label className="chk" title="When on, the engine refuses all network access">
-          <input type="checkbox" checked={offline} onChange={toggleOffline} />
-          Offline
-        </label>
-        <span className="spacer" />
-        <button onClick={() => setZoom((z) => Math.max(0.5, z - 0.15))}>−</button>
-        <span className="zoom">{Math.round(zoom * 100)}%</span>
-        <button onClick={() => setZoom((z) => Math.min(3, z + 0.15))}>+</button>
-      </header>
+    <div className="screen">
+      <TitleBar
+        title={`${name}${dirty ? " ·" : ""}`}
+        right={
+          <button className="lamp" onClick={toggleOffline}
+            title={offline ? "The engine refuses all network access" : "The engine may fetch missing resources"}>
+            <span className={`lamp-dot${offline ? "" : " is-open"}`} />
+            {offline ? "Offline" : "Network"}
+          </button>
+        }
+      />
 
       {missing && (
         <div className="banner">
-          <span>
-            <code>{missing}</code> is not in the offline cache.
-          </span>
-          <button onClick={() => build(source, true)} disabled={busy}>
-            Fetch it
-          </button>
-          <button onClick={primeCache} disabled={busy}>
-            Prime full cache
-          </button>
-          <span className="muted">(both need network, once)</span>
+          <span><code>{missing}</code> is not in the offline cache.</span>
+          <button className="btn btn-sm btn-primary" onClick={() => build(source, true)} disabled={busy}>Fetch it</button>
+          <button className="btn btn-sm" onClick={primeCache} disabled={busy}>Prime full cache</button>
+          <span className="banner-note">both need the network, once</span>
         </div>
       )}
 
-      <div className="panes">
-        <nav className="outline">
-          <div className="outline-head">Outline</div>
-          {sections.length === 0 && <div className="muted">No sections</div>}
-          {sections.map((s, i) => (
-            <button key={i} className="outline-item" style={{ paddingLeft: 8 + s.level * 12 }}
-              onClick={() => setGoto(s.line)} title={`line ${s.line}`}>
-              {s.title}
-            </button>
-          ))}
+      <div className="spread">
+        {/* Contents — the verso margin */}
+        <nav className="contents">
+          <div className="rubric">Contents</div>
+          <div className="contents-list">
+            {sections.map((s, i) => (
+              <button
+                key={`${s.line}-${i}`}
+                className="contents-item"
+                style={{ paddingLeft: 9 + (s.level - baseLevel) * 11 }}
+                onClick={() => editor.current?.goto(s.line)}
+                title={`line ${s.line}`}
+              >
+                <span className="contents-num tnum">{i + 1}</span>
+                <span className="contents-title">{s.title}</span>
+              </button>
+            ))}
+            {sections.length === 0 && <div className="contents-empty">No sections yet</div>}
+          </div>
+
+          <div className="hairline" />
+          <div className="contents-tally">
+            {tally.sections} section{tally.sections === 1 ? "" : "s"} · {tally.equations} equation{tally.equations === 1 ? "" : "s"}
+            <br />
+            {tally.citations} citation{tally.citations === 1 ? "" : "s"}
+          </div>
+
+          <div className="contents-foot">
+            <span className={`state-dot${dirty ? " is-dirty" : ""}`} />
+            <span className="contents-state">{dirty ? "Unsaved changes" : "Saved"}</span>
+          </div>
         </nav>
 
-        <section className="pane">
-          <Editor doc={source} docKey={docKey} onChange={edit} gotoLine={goto} />
+        {/* Source — the verso page */}
+        <section className="source">
+          <Editor
+            ref={editor}
+            doc={source}
+            docKey={docKey}
+            onChange={edit}
+            onSelection={setSelection}
+          />
         </section>
 
-        <section className="pane">
-          <PdfView data={pdf} zoom={zoom} />
+        <div className="gutter" />
+
+        {/* Proof or marks — the recto page */}
+        <section className="recto">
+          <div className="recto-tabs">
+            <button
+              className={`recto-tab${rightPane === "proof" ? " is-on" : ""}`}
+              onClick={() => setRightPane("proof")}
+            >
+              Proof
+            </button>
+            <button
+              className={`recto-tab${rightPane === "marks" ? " is-on" : ""}`}
+              onClick={() => setRightPane("marks")}
+              disabled={visible.length === 0}
+            >
+              Marks{visible.length > 0 && ` · ${visible.length}`}
+            </button>
+          </div>
+
+          {rightPane === "proof" ? (
+            <PdfView data={pdf} zoom={zoom} onPages={setPages} onPage={setPage} />
+          ) : (
+            <Marks
+              diags={visible}
+              built={!!pdf}
+              onGoto={(l) => editor.current?.goto(l)}
+              onFix={applyFix}
+              onIgnore={(d) => setIgnored((ids) => [...ids, markKey(d)])}
+            />
+          )}
+
+          <div className="recto-foot tnum">
+            <span>
+              {pages > 0 ? `Page ${Math.min(page, pages)} of ${pages}` : "No proof yet"}
+              {" · "}{Math.round(zoom * 100)}%
+            </span>
+            <span className={busy ? "is-working" : undefined}>{status}</span>
+          </div>
         </section>
       </div>
 
-      <footer className="status">
-        <span className="doc" title={path ?? "Unsaved scratch document"}>
-          {path ? path.split("/").pop() : "untitled.tex"}
-          {dirty && <span className="dot" title="Unsaved changes"> ●</span>}
-        </span>
-        <span className={busy ? "pulse" : ""}>{status}</span>
-        <span className="spacer" />
-        {errors.length > 0 && <span className="err">{errors.length} error{errors.length > 1 ? "s" : ""}</span>}
-        {warnings.length > 0 && <span className="warn">{warnings.length} warning{warnings.length > 1 ? "s" : ""}</span>}
-      </footer>
+      <PressLog
+        rows={press}
+        durationMs={buildMs}
+        open={pressOpen}
+        onToggle={() => setPressOpen((v) => !v)}
+      />
 
-      {diags.length > 0 && (
-        <div className="diags">
-          {diags.slice(0, 40).map((d, i) => (
-            <button key={i} className={`diag ${d.severity}`}
-              onClick={() => d.line && setGoto(d.line)}>
-              <span className="sev">{d.severity === "error" ? "✕" : "!"}</span>
-              {d.line && <span className="ln">{d.line}</span>}
-              <span className="msg">{d.message}</span>
-            </button>
-          ))}
-        </div>
+      {exportOpen && pdf && (
+        <ExportSheet
+          pdf={pdf}
+          name={name}
+          docSheet={sheetOf(source)}
+          durationMs={buildMs}
+          busy={busy}
+          onExport={runExport}
+          onClose={() => setExportOpen(false)}
+        />
       )}
+
+      {palette}
     </div>
   );
+}
+
+/** Stable identity for a mark, so ignoring one survives a re-render. */
+function markKey(d: Diagnostic): string {
+  return `${d.severity}:${d.title}:${d.line ?? ""}`;
 }

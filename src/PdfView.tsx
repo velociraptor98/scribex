@@ -8,14 +8,19 @@ interface Props {
   /** Raw PDF bytes; null before the first successful build. */
   data: Uint8Array | null;
   zoom: number;
+  /** Reports page count and the page currently in view, for the recto footer. */
+  onPages?: (total: number) => void;
+  onPage?: (current: number) => void;
 }
 
-export default function PdfView({ data, zoom }: Props) {
+export default function PdfView({ data, zoom, onPages, onPage }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   // Preserve scroll position across recompiles — otherwise every keystroke
   // throws the reader back to page 1, which makes live preview unusable.
   const scroll = useRef(0);
+  const report = useRef({ onPages, onPage });
+  report.current = { onPages, onPage };
 
   useEffect(() => {
     if (!data || !host.current) return;
@@ -30,6 +35,7 @@ export default function PdfView({ data, zoom }: Props) {
         task = pdfjs.getDocument({ data: data.slice() });
         const doc = await task.promise;
         if (cancelled) return;
+        report.current.onPages?.(doc.numPages);
 
         const prev = scroll.current;
         const frag = document.createDocumentFragment();
@@ -40,7 +46,8 @@ export default function PdfView({ data, zoom }: Props) {
           if (cancelled) return;
           const viewport = page.getViewport({ scale: zoom });
           const canvas = document.createElement("canvas");
-          canvas.className = "page";
+          canvas.className = "page plate";
+          canvas.dataset.page = String(n);
           canvas.width = Math.floor(viewport.width * dpr);
           canvas.height = Math.floor(viewport.height * dpr);
           canvas.style.width = `${Math.floor(viewport.width)}px`;
@@ -66,14 +73,22 @@ export default function PdfView({ data, zoom }: Props) {
     };
   }, [data, zoom]);
 
+  /** Whichever page covers the middle of the well is the one being read. */
+  function trackPage(el: HTMLDivElement) {
+    scroll.current = el.scrollTop;
+    const mid = el.scrollTop + el.clientHeight / 2;
+    let current = 1;
+    for (const c of Array.from(el.children) as HTMLElement[]) {
+      if (c.offsetTop <= mid) current = Number(c.dataset.page ?? current);
+      else break;
+    }
+    report.current.onPage?.(current);
+  }
+
   return (
-    <div
-      className="pdf"
-      ref={host}
-      onScroll={(e) => (scroll.current = e.currentTarget.scrollTop)}
-    >
-      {error && <div className="pdf-error">{error}</div>}
-      {!data && !error && <div className="pdf-empty">No output yet</div>}
+    <div className="pdf" ref={host} onScroll={(e) => trackPage(e.currentTarget)}>
+      {error && <div className="pdf-error selectable">{error}</div>}
+      {!data && !error && <div className="pdf-empty">Nothing set yet</div>}
     </div>
   );
 }
