@@ -28,11 +28,16 @@ Requires Rust, Node, and the C libraries Tectonic links against:
 
 ```sh
 brew install harfbuzz freetype icu4c openssl@3 graphite2 libpng fontconfig
-export PKG_CONFIG_PATH="/opt/homebrew/opt/icu4c@78/lib/pkgconfig:/opt/homebrew/opt/openssl@3/lib/pkgconfig:/opt/homebrew/lib/pkgconfig"
+export PKG_CONFIG_PATH="$(brew --prefix icu4c)/lib/pkgconfig:$(brew --prefix openssl@3)/lib/pkgconfig:$(brew --prefix)/lib/pkgconfig"
 
 npm install
 npm run tauri dev
 ```
+
+`brew --prefix` resolves the paths, so this works on Apple Silicon
+(`/opt/homebrew`), Intel (`/usr/local`) and custom Homebrew locations. ICU and
+OpenSSL are keg-only, so pkg-config can't find them without these entries.
+Add the line to your shell profile to keep it across sessions.
 
 The first Rust build compiles Tectonic's vendored C and takes several minutes.
 
@@ -40,6 +45,44 @@ The first Rust build compiles Tectonic's vendored C and takes several minutes.
 fails offline, because its display-size font isn't cached. Click **Prime full
 cache** when the banner appears. [docs/OFFLINE.md](docs/OFFLINE.md) has the
 details.
+
+## Building the macOS app
+
+With `PKG_CONFIG_PATH` set as above:
+
+```sh
+npm run tauri build       # ad-hoc signed, for this machine
+npm run build:release     # Developer ID signed; set APPLE_SIGNING_IDENTITY first
+```
+
+Output lands in `src-tauri/target/release/bundle/` (`macos/ScribeX.app`, `dmg/`).
+The DMG step needs Automation permission for your terminal to control Finder.
+
+Tectonic links ICU, FreeType, Graphite2 and libpng from Homebrew. The build
+ships them inside the app, and nothing in it assumes a Homebrew location or a
+library version:
+
+- `npm run tauri …` first runs `src-tauri/scripts/stage-dylibs.sh`. It asks
+  pkg-config where the libraries are, follows their dependencies, and copies
+  them into `src-tauri/frameworks/` with `@rpath` install names. It then writes
+  `src-tauri/tauri.macos.conf.json` (gitignored), which Tauri merges into
+  `tauri.conf.json` on macOS. That file lists the libraries and sets
+  `minimumSystemVersion` to the highest macOS version they were built for.
+- `src-tauri/scripts/relink-binary.sh`, run as `beforeBundleCommand`, points
+  the binary at the bundled copies. It fails the build if the binary still
+  links a non-system library that wasn't bundled.
+
+Run Tauri through `npm run tauri`, not `npx tauri` or the global CLI, so the
+staging step runs. The minimum macOS version follows the machine that builds:
+current Homebrew targets its own macOS release, which is macOS 26 here. The
+ad-hoc build turns off the hardened
+runtime: its library validation rejects ad-hoc signed libraries. The release
+config turns it back on, which notarization requires.
+
+Third-party licenses ship in `Contents/Resources/licenses/`; see
+[THIRD-PARTY-NOTICES.md](src-tauri/licenses/THIRD-PARTY-NOTICES.md). Portions
+of this software are copyright © 2026 The FreeType Project
+(https://freetype.org). All rights reserved.
 
 ## Layout
 
