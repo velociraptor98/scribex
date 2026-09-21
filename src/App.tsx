@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { confirm, open, save } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import { appLocalDataDir } from "@tauri-apps/api/path";
@@ -330,6 +331,12 @@ export default function App() {
     await invoke("set_offline", { offline: next });
   }
 
+  function requestExport() {
+    if (screen !== "editor") return;
+    if (pdf) setExportOpen(true);
+    else setStatus("Nothing to export yet");
+  }
+
   function edit(next: string) {
     setSource(next);
     setDirty(true);
@@ -358,7 +365,7 @@ export default function App() {
   const commands = useMemo<AppCommand[]>(() => [
     { id: "save", title: "Save", hint: "⌘S", words: ["write", "disk"], run: () => saveFile(), disabled: !dirty && !!path },
     { id: "saveas", title: "Save as…", hint: "⇧⌘S", words: ["copy", "rename"], run: () => saveFile(true) },
-    { id: "export", title: "Export PDF…", hint: "⌘E", words: ["imprint", "pdf", "print"], run: () => setExportOpen(true), disabled: !pdf },
+    { id: "export", title: "Export as PDF…", hint: "⌘E", words: ["pdf", "save", "print"], run: () => setExportOpen(true), disabled: !pdf },
     { id: "open", title: "Open…", hint: "⌘O", words: ["file", "document"], run: openFile },
     { id: "new", title: "New document", hint: "⌘N", words: ["blank", "start"], run: () => adopt(ARTICLE, null, "New document") },
     { id: "build", title: "Set now", hint: "⌘R", words: ["build", "compile", "typeset", "rebuild"], run: () => build(source), disabled: busy },
@@ -374,8 +381,8 @@ export default function App() {
 
   // Keyboard shortcuts. Held in a ref so the listener always calls the current
   // closure without rebinding on every keystroke.
-  const hotkeys = useRef({ saveFile, setExportOpen, build, source, pdf, screen, adopt, openFile });
-  hotkeys.current = { saveFile, setExportOpen, build, source, pdf, screen, adopt, openFile };
+  const hotkeys = useRef({ saveFile, requestExport, build, source, screen, adopt, openFile });
+  hotkeys.current = { saveFile, requestExport, build, source, screen, adopt, openFile };
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (!(e.metaKey || e.ctrlKey)) return;
@@ -388,7 +395,6 @@ export default function App() {
       if (h.screen !== "editor") return;
 
       if (k === "s") { e.preventDefault(); h.saveFile(e.shiftKey); }        // ⇧ forces Save As
-      else if (k === "e") { e.preventDefault(); if (h.pdf) h.setExportOpen(true); }
       else if (k === "r") { e.preventDefault(); h.build(h.source); }
       else if (k === "b") { e.preventDefault(); insert(`\\textbf{${CARET}}`); }
       else if (k === "i") { e.preventDefault(); insert(`\\emph{${CARET}}`); }
@@ -397,6 +403,15 @@ export default function App() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // ⌘E is the File menu's accelerator, so it arrives here rather than as a
+  // keydown.
+  useEffect(() => {
+    const pending = listen<string>("menu", (e) => {
+      if (e.payload === "export") hotkeys.current.requestExport();
+    });
+    return () => { pending.then((unlisten) => unlisten()); };
   }, []);
 
   // Confirm before discarding unsaved work.
@@ -528,6 +543,14 @@ export default function App() {
               disabled={visible.length === 0}
             >
               Marks{visible.length > 0 && ` · ${visible.length}`}
+            </button>
+            <button
+              className="btn btn-sm recto-export"
+              onClick={() => setExportOpen(true)}
+              disabled={!pdf || busy}
+              title="Export as PDF (⌘E)"
+            >
+              Export PDF
             </button>
           </div>
 

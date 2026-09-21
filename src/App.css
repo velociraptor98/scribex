@@ -176,6 +176,7 @@
 
 .recto-tabs {
   display: flex;
+  align-items: center;
   gap: 20px;
   padding: 22px 0 14px;
   flex: none;
@@ -194,6 +195,7 @@
 .recto-tab:hover:not(:disabled) { color: var(--text-70); }
 .recto-tab.is-on { color: var(--accent); border-bottom-color: var(--accent); }
 .recto-tab:disabled { opacity: 0.4; cursor: default; }
+.recto-export { margin-left: auto; }
 
 .recto-foot {
   display: flex;

@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 /// Offline-first: the engine refuses network access unless the user opts in.
 struct Settings {
@@ -226,6 +226,7 @@ async fn warmup_cache(
 }
 
 const QUIT_ID: &str = "scribex-quit";
+const EXPORT_ID: &str = "scribex-export";
 
 /// Tauri's default menu, with the predefined Quit item replaced by an ordinary
 /// one.
@@ -245,6 +246,7 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         true,
         Some("CmdOrCtrl+Q"),
     )?;
+    let export = MenuItem::with_id(app, EXPORT_ID, "Export as PDF…", true, Some("CmdOrCtrl+E"))?;
 
     Menu::with_items(
         app,
@@ -278,6 +280,8 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
                 "File",
                 true,
                 &[
+                    &export,
+                    &PredefinedMenuItem::separator(app)?,
                     &PredefinedMenuItem::close_window(app, None)?,
                     #[cfg(not(target_os = "macos"))]
                     &quit,
@@ -344,6 +348,10 @@ pub fn run() {
                 for (_, window) in app.webview_windows() {
                     let _ = window.close();
                 }
+            } else if event.id() == EXPORT_ID {
+                // The frontend owns the export dialog and knows whether there
+                // is a PDF to export.
+                let _ = app.emit("menu", "export");
             }
         })
         .invoke_handler(tauri::generate_handler![

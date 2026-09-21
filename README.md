@@ -56,7 +56,12 @@ npm run build:release     # Developer ID signed; set APPLE_SIGNING_IDENTITY firs
 ```
 
 Output lands in `src-tauri/target/release/bundle/` (`macos/ScribeX.app`, `dmg/`).
-The DMG step needs Automation permission for your terminal to control Finder.
+The DMG step uses AppleScript to lay out the Finder window, which needs your
+terminal to have Automation permission for Finder. Without it the build fails
+with `error running bundle_dmg.sh` (the verbose log shows `Not authorised to
+send Apple events to Finder (-1743)`). Either allow it under System Settings →
+Privacy & Security → Automation, or build with `CI=true npm run tauri build`,
+which skips the layout step and uses Finder's default window.
 
 Tectonic links ICU, FreeType, Graphite2 and libpng from Homebrew. The build
 ships them inside the app, and nothing in it assumes a Homebrew location or a
