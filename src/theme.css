@@ -1,8 +1,6 @@
-/* ScribeX — the dark editorial variant of Classical.
- *
- * Tokens come from the design mockup. The light "Classical" ramps are kept
- * because the typeset page is genuinely light: a PDF sits on paper, framed by
- * a dark press. Everything outside the page uses the ink scale.
+/* The light "Classical" ramps are kept because the typeset page is light: a
+ * PDF sits on paper, framed by a dark surround. Everything outside the page
+ * uses the ink scale.
  */
 
 @import "./fonts.css";
@@ -126,7 +124,7 @@ body { user-select: none; }
   color: var(--text-55);
 }
 
-/* A sheet of paper: the plate border the mockup puts around every page. */
+/* A sheet of paper, bordered, around every rendered page. */
 .plate {
   background: var(--paper);
   color: var(--paper-ink);

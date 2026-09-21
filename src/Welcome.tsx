@@ -1,5 +1,3 @@
-/** 1b — Welcome: a title page, not a dashboard. */
-
 import { PLATES, Plate } from "./templates";
 import { RecentDoc, when } from "./recent";
 import TitleBar from "./TitleBar";
@@ -21,13 +19,16 @@ export default function Welcome({
       <TitleBar />
       <div className="welcome">
         <section className="welcome-title">
-          <div className="welcome-kicker">Offline · No account · No cloud</div>
-          <h1 className="welcome-word">ScribeX</h1>
+          <div className="welcome-lockup">
+            <svg className="welcome-mark" viewBox="0 0 100 100" aria-hidden>
+              <g fill="none" stroke="var(--accent)" strokeWidth="6.5" strokeLinecap="round">
+                <path d="M23 33 C23 23 34 24 35 33 C37 47 63 53 65 67 C66 77 77 76 77 67" />
+                <path d="M77 33 C77 23 66 24 65 33 C63 47 37 53 35 67 C34 77 23 76 23 67" />
+              </g>
+            </svg>
+            <h1 className="welcome-word">Scribe<span className="welcome-x">X</span></h1>
+          </div>
           <div className="welcome-rule" />
-          <p className="welcome-lede">
-            A quiet press for LaTeX. Type plain sentences; ScribeX sets the type,
-            keeps the maths honest, and never asks for the network.
-          </p>
 
           <div className="welcome-actions">
             <button className="btn btn-primary" onClick={onNew}>New document</button>
@@ -56,10 +57,7 @@ export default function Welcome({
           <div className="rubric">Recently set</div>
 
           {recent.length === 0 ? (
-            <p className="welcome-empty">
-              Nothing yet. What you open here stays here — the list lives on this
-              machine and goes no further.
-            </p>
+            <p className="welcome-empty">No recent documents.</p>
           ) : (
             <div className="recent-list">
               {recent.map((d) => (
@@ -81,7 +79,7 @@ export default function Welcome({
 
           <div className="welcome-search">
             <button className="key" onClick={onSearch}>⌘K</button>
-            <span>to search every document on this machine</span>
+            <span>to search documents</span>
           </div>
         </section>
       </div>

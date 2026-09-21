@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { confirm, open, save } from "@tauri-apps/plugin-dialog";
-import { readTextFile, writeTextFile, mkdir } from "@tauri-apps/plugin-fs";
+import { readTextFile } from "@tauri-apps/plugin-fs";
 import { appLocalDataDir } from "@tauri-apps/api/path";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
@@ -14,7 +14,7 @@ import ExportSheet from "./ExportSheet";
 import { Marks, PressLog } from "./Marks";
 
 import { bibKeys, outline, stats } from "./latex";
-import { Diagnostic, Fix, PressRow, parseLog, pressLog } from "./texlog";
+import { Diagnostic, Fix, PressRow, markKey, parseLog, pressLog } from "./texlog";
 import { ARTICLE, Plate } from "./templates";
 import { RecentDoc, documentTitle, loadRecent, remember } from "./recent";
 import { ExportOptions, applyOptions, needsRebuild, sheetOf } from "./exporting";
@@ -137,11 +137,11 @@ export default function App() {
     [path, keys, name]
   );
 
-  // Resolve a scratch path once, before anything can ask for a build.
+  // Resolve a scratch path once, before anything can ask for a build. The
+  // backend creates the directory when it first builds there.
   useEffect(() => {
     (async () => {
       const dir = await appLocalDataDir();
-      await mkdir(dir, { recursive: true }).catch(() => {});
       scratchPath.current = `${dir}/scratch.tex`;
       await invoke("set_offline", { offline: true });
     })();
@@ -229,7 +229,7 @@ export default function App() {
     }
   }
 
-  /// Write the buffer to disk, prompting for a location if there isn't one yet.
+  /** Write the buffer to disk, prompting for a location if there isn't one yet. */
   async function saveFile(forceDialog = false) {
     let target = path;
     if (!target || forceDialog) {
@@ -272,10 +272,11 @@ export default function App() {
     });
     if (typeof dest !== "string") return;
 
+    const rebuild = needsRebuild(opts, sheetOf(source));
     setExportOpen(false);
     setBusy(true);
     try {
-      if (needsRebuild(opts, sheetOf(source))) {
+      if (rebuild) {
         setStatus("Setting for export…");
         // Bypass `build` so the on-screen proof is not replaced by the variant.
         seq.current++;
@@ -289,7 +290,7 @@ export default function App() {
 
       if (opts.sourceAlongside) {
         const beside = dest.replace(/\.pdf$/i, ".tex");
-        await writeTextFile(beside, source);
+        await invoke("save_document", { path: beside, source });
       }
 
       setStatus(
@@ -301,7 +302,7 @@ export default function App() {
     } finally {
       setBusy(false);
       // Restore the proof, which the export build may have overwritten on disk.
-      if (needsRebuild(opts, sheetOf(source))) build(source);
+      if (rebuild) build(source);
     }
   }
 
@@ -311,8 +312,7 @@ export default function App() {
     setBusy(true);
     setStatus("Priming offline cache…");
     try {
-      const dir = await appLocalDataDir();
-      const ms = await invoke<number>("warmup_cache", { dir });
+      const ms = await invoke<number>("warmup_cache");
       setStatus(`Cache primed in ${ms} ms`);
       setMissing(null);
       await build(source);
@@ -471,7 +471,6 @@ export default function App() {
       )}
 
       <div className="spread">
-        {/* Contents — the verso margin */}
         <nav className="contents">
           <div className="rubric">Contents</div>
           <div className="contents-list">
@@ -503,7 +502,6 @@ export default function App() {
           </div>
         </nav>
 
-        {/* Source — the verso page */}
         <section className="source">
           <Editor
             ref={editor}
@@ -516,7 +514,6 @@ export default function App() {
 
         <div className="gutter" />
 
-        {/* Proof or marks — the recto page */}
         <section className="recto">
           <div className="recto-tabs">
             <button
@@ -578,9 +575,4 @@ export default function App() {
       {palette}
     </div>
   );
-}
-
-/** Stable identity for a mark, so ignoring one survives a re-render. */
-function markKey(d: Diagnostic): string {
-  return `${d.severity}:${d.title}:${d.line ?? ""}`;
 }

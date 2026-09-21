@@ -1,8 +1,7 @@
 /** The 40px bar across the top of every screen.
  *
- *  The mockup draws macOS traffic lights; the window is configured with an
- *  overlay title bar so those are the real ones, drawn by the system. All this
- *  needs to do is leave room for them and stay draggable. */
+ *  The window uses an overlay title bar, so the traffic lights are drawn by the
+ *  system; this only leaves room for them and stays draggable. */
 
 interface Props {
   /** Centred, in small caps. Omitted on the welcome screen. */

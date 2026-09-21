@@ -9,7 +9,7 @@ import { tags as t } from "@lezer/highlight";
 import { latexLanguage, latexCompletion } from "./latex";
 import { CARET } from "./commands";
 
-/** Imperative handle used by the palette and by the marginalia's quick fixes. */
+/** Imperative handle used by the palette and by the marks' quick fixes. */
 export interface EditorHandle {
   /** Insert at the caret, replacing any selection. A CARET marker in `text`
    *  sets where the caret lands; otherwise it lands after the insertion. */
@@ -17,7 +17,6 @@ export interface EditorHandle {
   /** Replace the first occurrence of `find` on a 1-based line. */
   replaceOnLine: (line: number, find: string, replace: string) => void;
   goto: (line: number) => void;
-  selection: () => string;
   focus: () => void;
 }
 
@@ -33,8 +32,7 @@ interface Props {
   onSelection?: (text: string) => void;
 }
 
-/* The mockup's source pane: gilt commands on near-black, set on a 28px rhythm
-   so the lines align with the typeset page beside them. */
+/* Set on a 28px rhythm so the lines align with the typeset page beside them. */
 const latexHighlight = HighlightStyle.define([
   { tag: t.tagName, color: "var(--accent)" },
   { tag: [t.atom, t.keyword], color: "var(--accent-400)" },
@@ -197,13 +195,6 @@ const Editor = forwardRef<EditorHandle, Props>(function Editor(
       if (!v || line < 1 || line > v.state.doc.lines) return;
       v.dispatch({ selection: { anchor: v.state.doc.line(line).from }, scrollIntoView: true });
       v.focus();
-    },
-
-    selection() {
-      const v = view.current;
-      if (!v) return "";
-      const r = v.state.selection.main;
-      return r.empty ? "" : v.state.sliceDoc(r.from, r.to);
     },
 
     focus() { view.current?.focus(); },

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- ScribeX app icon — logo mark 2a, "crossed integrals": the X is two integral
+       strokes. Geometry is the design doc's 64px tile scaled by 12.875 to an 824px
+       tile on a 1024px canvas, leaving the ~10% transparent margin macOS expects.
+       Path coordinates are the doc's 0-100 mark baked through that scale, so the
+       file carries no transforms and rasterizes identically in every renderer. -->
+  <rect x="100" y="100" width="824" height="824" rx="167.375" ry="167.375" fill="#201f1d"/>
+  <rect x="106.4375" y="106.4375" width="811.125" height="811.125" rx="160.9375" ry="160.9375"
+        fill="none" stroke="#ece7df" stroke-opacity="0.14" stroke-width="12.875"/>
+  <g fill="none" stroke="#c28d41" stroke-width="39.14" stroke-linecap="round">
+    <path d="M 379.9 428.83 C 379.9 379.9 433.72 384.8 438.61 428.83 C 448.4 497.32 575.6 526.68 585.39 595.17 C 590.28 644.1 644.1 639.2 644.1 595.17"/>
+    <path d="M 644.1 428.83 C 644.1 379.9 590.28 384.8 585.39 428.83 C 575.6 497.32 448.4 526.68 438.61 595.17 C 433.72 644.1 379.9 639.2 379.9 595.17"/>
+  </g>
+</svg>

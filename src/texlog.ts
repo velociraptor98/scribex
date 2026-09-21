@@ -6,9 +6,6 @@
  * cases worth translating into a heading and a sentence, and — where the fix is
  * unambiguous — an edit the reader can accept. Anything it cannot translate is
  * passed through verbatim rather than guessed at.
- *
- * TeX logs are irregular; if this proves too thin, swap in Overleaf's
- * `latex-log-parser`, which handles far more edge cases.
  */
 
 /** A single-line edit offered beside a mark. Applied by the caller. */
@@ -29,7 +26,6 @@ export interface Diagnostic {
   /** TeX's own wording, always kept. */
   raw: string;
   line?: number;
-  file?: string;
   fixes?: Fix[];
 }
 
@@ -259,7 +255,7 @@ export function parseLog(log: string, ctx: Context = {}): Diagnostic[] {
       const at = lm ? parseInt(lm[1], 10) : undefined;
       const t = translate(raw, at, ctx);
       out.push(
-        t ?? { severity: "warning", title: raw, raw, line: at, file: warn[1] }
+        t ?? { severity: "warning", title: raw, raw, line: at }
       );
     }
   }
@@ -267,11 +263,16 @@ export function parseLog(log: string, ctx: Context = {}): Diagnostic[] {
   // One mark per problem: TeX repeats an undefined citation on every page.
   const seen = new Set<string>();
   return out.filter((d) => {
-    const k = `${d.severity}:${d.title}:${d.line ?? ""}`;
+    const k = markKey(d);
     if (seen.has(k)) return false;
     seen.add(k);
     return true;
   });
+}
+
+/** Stable identity for a mark, shared by de-duplication and "Ignore". */
+export function markKey(d: Diagnostic): string {
+  return `${d.severity}:${d.title}:${d.line ?? ""}`;
 }
 
 /* ── the press log ───────────────────────────────────────────────────────── */
@@ -293,18 +294,13 @@ export interface PressRow {
  */
 export function pressLog(
   log: string,
-  opts: { source?: string; name?: string; pages?: number; diags?: Diagnostic[] } = {}
+  opts: { source?: string; name?: string; diags?: Diagnostic[] } = {}
 ): PressRow[] {
   const { source = "", name = "document.tex", diags = [] } = opts;
   const stem = name.replace(/\.tex$/i, "");
   const rows: PressRow[] = [];
 
-  rows.push({
-    stage: "typeset",
-    detail: opts.pages
-      ? `${name} → ${stem}.pdf · ${opts.pages} page${opts.pages > 1 ? "s" : ""}`
-      : `${name} → ${stem}.pdf`,
-  });
+  rows.push({ stage: "typeset", detail: `${name} → ${stem}.pdf` });
 
   const cited = new Set(
     [...source.matchAll(/\\cite\w*\s*(?:\[[^\]]*\])*\{([^}]*)\}/g)]

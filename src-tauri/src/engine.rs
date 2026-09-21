@@ -16,18 +16,15 @@ use tectonic::config::PersistentConfig;
 use tectonic::driver::{OutputFormat, ProcessingSessionBuilder};
 use tectonic::status::NoopStatusBackend;
 
-#[derive(serde::Serialize)]
 pub struct CompileOk {
-    pub pdf: Vec<u8>,
     pub log: String,
     pub duration_ms: u64,
 }
 
-#[derive(serde::Serialize)]
 pub struct CompileErr {
     pub message: String,
     pub log: String,
-    /// True when the build failed only because a package was absent from the
+    /// Set when the build failed only because a resource was absent from the
     /// offline cache — the UI offers "fetch it" rather than showing a TeX error.
     pub missing_file: Option<String>,
     pub duration_ms: u64,
@@ -137,10 +134,12 @@ pub fn compile(
     sess.run(&mut status)
         .map_err(|e| fail(e.to_string(), read_log()))?;
 
-    let pdf = std::fs::read(out_dir.join(format!("{stem}.pdf")))
-        .map_err(|e| fail(format!("no PDF produced: {e}"), read_log()))?;
+    // The parent reads the PDF itself; only confirm one was written.
+    if !out_dir.join(format!("{stem}.pdf")).exists() {
+        return Err(fail("no PDF produced".into(), read_log()));
+    }
 
-    Ok(CompileOk { pdf, log: read_log(), duration_ms: ms(started) })
+    Ok(CompileOk { log: read_log(), duration_ms: ms(started) })
 }
 
 /// A document that touches the resources a cold cache is most likely to lack:

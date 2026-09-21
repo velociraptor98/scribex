@@ -1,38 +1,26 @@
 # ScribeX
 
-An offline LaTeX reader and editor. Tauri shell, CodeMirror 6 editor, PDF.js
-viewer, and [Tectonic](https://tectonic-typesetting.github.io/) as the
-typesetting engine — no TeX Live installation, no server.
+An offline LaTeX editor. Tauri shell, CodeMirror 6 editor, PDF.js viewer, and
+[Tectonic](https://tectonic-typesetting.github.io/) as the typesetting engine.
+No TeX Live installation or server is needed.
 
-## Status
+## Features
 
-Working end to end: open, edit, save (⌘S) and save-as (⇧⌘S), export (⌘E),
-live rebuild on a 600 ms debounce, PDF preview, section outline, and TeX log
-diagnostics that jump to the offending line. Typical rebuild is ~700 ms (debug
-build) once resources are cached.
+- Open, edit, save (⌘S), save as (⇧⌘S) and export to PDF (⌘E).
+- Live rebuild 600 ms after you stop typing. A rebuild takes about 700 ms in a
+  debug build once resources are cached.
+- Section outline, and TeX log errors that jump to the offending line. Some
+  errors come with a one-click fix.
+- ⌘K palette: describe a snippet in plain English ("3 by 4 table") or run any
+  app command. There is no toolbar.
+- Export options for paper size and hyperlinked cross-references.
+- Starter templates: article, letter, thesis, Beamer.
 
-The interface is the dark editorial variant of *Classical* — a title page
-rather than a dashboard, a facing-page spread rather than a toolbar. Five
-screens:
+Preview never writes to your document. The engine typesets the editor buffer
+from memory, so the file on disk changes only when you save. `\input` and
+`\includegraphics` still resolve relative to the document's directory.
 
-| Screen | What it is |
-|---|---|
-| Welcome | Recent documents, and four starter plates |
-| Editor | Contents in the margin, source verso, proof recto |
-| Palette (⌘K) | Plain English in, LaTeX out — and every app command |
-| Marks | TeX errors rewritten as a proof-reader's slips, with one-click fixes |
-| Imprint sheet | Export, with paper size and hyperlinked cross-references |
-
-There is no toolbar; ⌘K reaches everything. Type is Cormorant Garamond and
-Lora, bundled as woff2 under `public/fonts/` — the app never fetches a
-webfont, for the same reason it never fetches anything else.
-
-**Preview never writes to your document.** The engine typesets the editor
-buffer from memory, so the file on disk changes only when you save. Multi-file
-projects still resolve — `\input` and `\includegraphics` are looked up relative
-to the document's real directory.
-
-Not yet built: SyncTeX, a project/file tree, a shipped resource bundle.
+Not built yet: SyncTeX, a project file tree, a bundled resource cache.
 
 ## Running
 
@@ -48,36 +36,38 @@ npm run tauri dev
 
 The first Rust build compiles Tectonic's vendored C and takes several minutes.
 
-**First run needs the network once.** With the cache cold, even `\maketitle`
-fails offline because its display-size font is not present. Click **Prime full
-cache** when the banner appears. [docs/OFFLINE.md](docs/OFFLINE.md) explains
-why, and covers the two non-obvious constraints this design is built around.
+**The first run needs the network once.** On a cold cache even `\maketitle`
+fails offline, because its display-size font isn't cached. Click **Prime full
+cache** when the banner appears. [docs/OFFLINE.md](docs/OFFLINE.md) has the
+details.
 
 ## Layout
 
 | Path | Role |
 |---|---|
-| `src-tauri/src/engine.rs` | Tectonic driver. **Worker process only** — see docs |
-| `src-tauri/src/worker.rs` | Crash isolation: re-exec + JSON over stdio |
-| `src-tauri/src/lib.rs` | Tauri commands: compile, save, export, offline toggle |
-| `src/Editor.tsx` | CodeMirror 6, LaTeX mode, completion |
-| `src/PdfView.tsx` | PDF.js canvas renderer, scroll-preserving |
-| `src/texlog.ts` | TeX log → marks and the press log |
-| `src/latex.ts` | LaTeX mode, completions, outline, document tally |
-| `src/theme.css` | Design tokens. The look is retuned here |
-| `src/Welcome.tsx` | Title page: recent documents and plates |
-| `src/Palette.tsx` | ⌘K — snippet suggestions merged with app commands |
-| `src/commands.ts` | The plain-English → LaTeX matcher (local, no model) |
-| `src/Marks.tsx` | Marginalia and the press log |
-| `src/ExportSheet.tsx` | The imprint sheet |
-| `src/exporting.ts` | Rewrites that make the export options real |
+| `src-tauri/src/engine.rs` | Tectonic driver. Worker process only — see below |
+| `src-tauri/src/worker.rs` | Runs each build in a child process, JSON over stdio |
+| `src-tauri/src/lib.rs` | Tauri commands: compile, save, export, cache warmup, offline toggle |
+| `src/App.tsx` | App state, builds, file handling, shortcuts |
+| `src/Editor.tsx` | CodeMirror 6 setup, LaTeX mode, completion |
+| `src/PdfView.tsx` | PDF.js renderer; keeps scroll position across rebuilds |
+| `src/texlog.ts` | Parses the TeX log into diagnostics and the build log |
+| `src/latex.ts` | LaTeX mode, completions, outline, document counts |
+| `src/Welcome.tsx` | Welcome screen: recent documents and templates |
+| `src/Palette.tsx` | ⌘K palette UI |
+| `src/commands.ts` | Plain-English → LaTeX snippet matcher (local keyword scoring) |
+| `src/Marks.tsx` | Diagnostics panel and build log |
+| `src/ExportSheet.tsx` | Export dialog |
+| `src/exporting.ts` | Source rewrites for export options |
+| `src/theme.css` | Design tokens |
 
-## Two things worth knowing before changing anything
+## Before changing anything
 
 1. **Typesetting must stay in the worker process.** A failed run leaves
-   Tectonic's C globals dirty, and the next in-process run aborts via a panic
-   that cannot unwind. This crashes the whole app, not just the build.
-2. **`tectonic` is pinned to git, not crates.io.** The published 0.15.0 does not
-   compile against its own published sibling crates.
+   Tectonic's C globals dirty, and the next run in the same process aborts
+   through a panic that can't unwind. Run in the GUI process, that takes down
+   the whole app.
+2. **`tectonic` is pinned to a git commit, not crates.io.** The published 0.15.0
+   doesn't compile against its own published sibling crates.
 
 Both are explained in [docs/OFFLINE.md](docs/OFFLINE.md).

@@ -1,7 +1,6 @@
-/** 1c — the ⌘K palette: plain English in, LaTeX out.
+/** The ⌘K palette: plain English in, LaTeX out.
  *
- *  It is also where the app's own commands live, since the redesign retires the
- *  toolbar. Snippet suggestions rank above commands when the query looks like a
+ *  It is also where the app's own commands live. Snippet suggestions rank above commands when the query looks like a
  *  request for LaTeX, and below them when it names a command. */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -144,7 +143,6 @@ export default function Palette({ commands, hasSelection, onInsert, onClose }: P
 
         <div className="palette-foot">
           <span>↑↓ to choose · ↵ to {best?.command ? "run" : "insert"}</span>
-          <span>Nothing leaves this machine</span>
         </div>
       </div>
     </div>

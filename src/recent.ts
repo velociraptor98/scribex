@@ -1,5 +1,4 @@
-/** "Recently set" on the welcome screen. Kept in localStorage — it is a
- *  convenience list, not user data, and it must never leave the machine. */
+/** The recent-documents list on the welcome screen, kept in localStorage. */
 
 export interface RecentDoc {
   path: string;
@@ -40,14 +39,6 @@ export function remember(doc: Omit<RecentDoc, "opened">): RecentDoc[] {
   return next;
 }
 
-export function forget(path: string): RecentDoc[] {
-  const next = loadRecent().filter((d) => d.path !== path);
-  try {
-    localStorage.setItem(KEY, JSON.stringify(next));
-  } catch { /* see remember() */ }
-  return next;
-}
-
 const TITLE_RE = /\\title\s*\{([^}]+)\}/;
 
 export function documentTitle(source: string, path: string | null): string {
@@ -56,7 +47,7 @@ export function documentTitle(source: string, path: string | null): string {
   return path?.split("/").pop() ?? "untitled.tex";
 }
 
-/** "2 min ago" · "Yesterday" · "3 Aug" — the mockup's relative scale. */
+/** "2 min ago" · "Yesterday" · "3 Aug". */
 export function when(ts: number, now = Date.now()): string {
   const mins = Math.floor((now - ts) / 60000);
   if (mins < 1) return "Just now";

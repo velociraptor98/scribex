@@ -4,8 +4,6 @@ import { autocompletion, CompletionContext } from "@codemirror/autocomplete";
 
 export const latexLanguage = StreamLanguage.define(stex);
 
-// A deliberately small starter set. The real version should harvest \newcommand
-// and \label from the open project, plus package names from the Tectonic cache.
 const COMMANDS = [
   "documentclass", "usepackage", "begin", "end", "section", "subsection",
   "subsubsection", "paragraph", "textbf", "textit", "texttt", "emph",
@@ -22,7 +20,6 @@ const ENVIRONMENTS = [
 ];
 
 function completions(ctx: CompletionContext) {
-  // \begin{...} / \end{...} → environment names
   const env = ctx.matchBefore(/\\(begin|end)\{[\w*]*/);
   if (env) {
     const brace = env.text.indexOf("{");
@@ -32,7 +29,6 @@ function completions(ctx: CompletionContext) {
     };
   }
 
-  // \... → command names
   const cmd = ctx.matchBefore(/\\[a-zA-Z]*/);
   if (cmd && (cmd.from < cmd.to - 1 || ctx.explicit)) {
     return {

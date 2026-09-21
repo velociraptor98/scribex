@@ -1,10 +1,7 @@
 /**
- * The ⌘K palette: plain English in, LaTeX out.
+ * Snippet matching for the ⌘K palette: plain English in, LaTeX out.
  *
- * Matching is a local keyword score — no model, no network. That is a design
- * constraint, not a shortcut: the palette's footer promises that nothing leaves
- * this machine, and an offline LaTeX editor that phones home to write a table
- * would be a poor joke. The vocabulary below is what makes it feel fluent, so
+ * Matching is a local keyword score, so the vocabulary below does the work —
  * synonyms matter more here than clever ranking.
  */
 
@@ -19,7 +16,6 @@ export interface Suggestion {
   /** A keyboard equivalent, when the action has one. */
   hint?: string;
   text?: string;
-  run?: () => void;
   score: number;
 }
 
@@ -39,7 +35,6 @@ interface Intent {
 }
 
 interface Query {
-  text: string;
   words: string[];
   /** First two integers in the query, e.g. "3 by 4" → [3, 4]. */
   nums: number[];
@@ -98,7 +93,6 @@ const INTENTS: Intent[] = [
     build: () => ({
       title: "Add a caption and a label",
       preview: "\\caption{…} \\label{tab:…}",
-      hint: "⌘⇧C",
       text: `\\caption{${CARET}}\n\\label{tab:key}`,
     }),
   },
@@ -327,17 +321,13 @@ function scoreIntent(intent: Intent, words: string[]): number {
   return hits === 0 ? 0 : hits / words.length;
 }
 
-/**
- * Rank snippet intents against a plain-English query. `appCommands` are merged
- * by the caller so the palette can also drive the app now the toolbar is gone.
- */
+/** Rank snippet intents against a plain-English query. */
 export function suggest(
   text: string,
   opts: { hasSelection?: boolean; limit?: number } = {}
 ): Suggestion[] {
   const words = tokenize(text);
   const q: Query = {
-    text,
     words,
     nums: (text.match(/\d+/g) ?? []).map(Number).slice(0, 2),
     hasSelection: opts.hasSelection ?? false,

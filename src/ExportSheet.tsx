@@ -1,5 +1,3 @@
-/** 1e — Export: the imprint sheet. */
-
 import { useEffect, useState } from "react";
 import * as pdfjs from "pdfjs-dist";
 import { ExportOptions, SHEETS, Sheet } from "./exporting";
@@ -39,12 +37,10 @@ export default function ExportSheet({
     <div className="scrim" onMouseDown={onClose}>
       <div className="imprint" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Export">
         <div className="imprint-head">
-          <div className="imprint-kicker">Export</div>
-          <h2 className="imprint-title">The imprint sheet</h2>
+          <h2 className="imprint-title">Export</h2>
           <p className="imprint-sub">
             {stem}.pdf
             {pages > 0 && ` · ${pages} page${pages > 1 ? "s" : ""}`}
-            {" · set locally, nothing uploaded"}
           </p>
         </div>
 

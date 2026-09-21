@@ -355,30 +355,33 @@
   flex-direction: column;
   overflow-y: auto;
 }
-.welcome-kicker {
-  font: 400 11px var(--font-body);
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--accent);
-  margin-bottom: 26px;
+/* Logo 2a: the crossed-integral mark set against the wordmark. Both are sized
+   in em off the lockup, so one font-size keeps the doc's mark-to-word ratio
+   (104:58) and its gap intact at every breakpoint. */
+.welcome-lockup {
+  display: flex;
+  align-items: center;
+  gap: 0.51em;
+  font-size: 76px;
+}
+.welcome-mark {
+  flex: none;
+  width: 1.79em;
+  height: 1.79em;
+  overflow: visible;
 }
 .welcome-word {
   margin: 0;
-  font: 300 76px/1 var(--font-heading);
+  font: 300 1em/1 var(--font-heading);
   letter-spacing: -0.02em;
   color: var(--text);
 }
+.welcome-x { color: var(--accent); }
 .welcome-rule {
   height: 1px;
   width: 120px;
   background: rgba(194, 141, 65, 0.45);
-  margin: 26px 0 22px;
-}
-.welcome-lede {
-  margin: 0 0 40px;
-  max-width: 330px;
-  font: italic 400 15px/1.75 var(--font-body);
-  color: var(--text-70);
+  margin: 26px 0 40px;
 }
 .welcome-actions { display: flex; gap: 12px; margin-bottom: auto; }
 .welcome-actions .btn { padding: 10px 18px; font-size: 14px; }
@@ -595,13 +598,6 @@
   overflow: hidden;
 }
 .imprint-head { padding: 26px 28px 22px; }
-.imprint-kicker {
-  font: 400 10.5px var(--font-body);
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--accent);
-  margin-bottom: 10px;
-}
 .imprint-title { margin: 0; font: 400 30px var(--font-heading); color: var(--text); }
 .imprint-sub {
   margin: 8px 0 0;
@@ -692,5 +688,5 @@
   .contents { width: 150px; padding: 22px 14px; }
   .recto { padding: 0 20px 22px; min-width: 300px; }
   .welcome-title, .welcome-recent { padding: 40px 32px; }
-  .welcome-word { font-size: 60px; }
+  .welcome-lockup { font-size: 60px; }
 }

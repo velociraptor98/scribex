@@ -101,11 +101,6 @@ fn set_offline(state: tauri::State<'_, Mutex<Settings>>, offline: bool) {
     state.lock().unwrap().only_cached = offline;
 }
 
-#[tauri::command]
-fn get_offline(state: tauri::State<'_, Mutex<Settings>>) -> bool {
-    state.lock().unwrap().only_cached
-}
-
 /// Path of the PDF a build for `entry` produces.
 fn pdf_path_for(entry: &Path) -> PathBuf {
     engine::out_dir_for(entry).join(
@@ -207,10 +202,14 @@ fn export_pdf(path: String, dest: String) -> Result<u64, String> {
 /// Prime the offline cache with the common package and font set.
 #[tauri::command]
 async fn warmup_cache(
+    app: tauri::AppHandle,
     builds: tauri::State<'_, Builds>,
-    dir: String,
 ) -> Result<u64, CompileErr> {
-    let work = PathBuf::from(dir).join("warmup");
+    let dir = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| err(format!("cannot locate app data: {e}")))?;
+    let work = dir.join("warmup");
     std::fs::create_dir_all(&work).map_err(|e| err(format!("cannot stage warmup: {e}")))?;
     // Queued like any other job: it shares the resource cache the builds read.
     // Never dropped — priming *is* the cache write, so skipping it would leave
@@ -330,7 +329,6 @@ pub fn run() {
     }
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .manage(Mutex::new(Settings::default()))
@@ -353,8 +351,7 @@ pub fn run() {
             save_document,
             export_pdf,
             warmup_cache,
-            set_offline,
-            get_offline
+            set_offline
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

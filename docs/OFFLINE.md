@@ -69,7 +69,7 @@ engine crash and the editor keeps running.
 
 ## Dependency pinning
 
-`Cargo.toml` pins `tectonic` to git `master`, not crates.io. The published
+`Cargo.toml` pins `tectonic` to a git commit on `master`, not crates.io. The published
 0.15.0 does not compile against the currently published sibling crates:
 `tectonic_bundles` 0.4.2 changed the `Bundle` trait (`all_files` lost its
 `status` argument and gained a `Result`), producing 17 errors across

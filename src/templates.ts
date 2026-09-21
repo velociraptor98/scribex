@@ -1,5 +1,5 @@
-/** The plates offered on the welcome screen. Each is a complete document that
- *  typesets on a cold cache, so "start from a plate" never lands on an error. */
+/** Templates offered on the welcome screen. Each is a complete document that
+ *  typesets on a cold cache. */
 
 export interface Plate {
   name: string;
@@ -15,8 +15,8 @@ export const ARTICLE = `\\documentclass{article}
 \\begin{document}
 \\maketitle
 
-\\section{Offline by default}
-This document was typeset locally by Tectonic, with no network access.
+\\section{Introduction}
+Start writing here.
 
 \\section{Mathematics}
 \\begin{equation}

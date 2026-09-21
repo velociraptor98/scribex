@@ -1,5 +1,3 @@
-/** 1d — errors as marginalia: a proof-reader's slip, plus the press log. */
-
 import { Diagnostic, Fix, PressRow } from "./texlog";
 
 interface MarksProps {

@@ -2,15 +2,11 @@
 name = "scribex"
 version = "0.1.0"
 description = "Offline LaTeX reader and editor"
-authors = ["you"]
+authors = ["Kunal Singh"]
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
-# The `_lib` suffix may seem redundant but it is necessary
-# to make the lib name unique and wouldn't conflict with the bin name.
-# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+# Distinct from the bin name; see https://github.com/rust-lang/cargo/issues/8519
 name = "scribex_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
@@ -19,7 +15,6 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
-tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 serde = { version = "1", features = ["derive"] }
@@ -27,5 +22,5 @@ serde_json = "1"
 
 # Pinned to git: the crates.io 0.15.0 release does not compile against the
 # currently published sibling crates (tectonic_bundles 0.4.x changed the Bundle
-# trait). The git workspace is internally consistent. Revisit on the next release.
-tectonic = { git = "https://github.com/tectonic-typesetting/tectonic", branch = "master" }
+# trait). Pinned to a commit so a push to master cannot change what we build.
+tectonic = { git = "https://github.com/tectonic-typesetting/tectonic", rev = "c225dca2aa11a5fb84ce0d286f6e9de7da50e6b6" }

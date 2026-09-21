@@ -1,5 +1,4 @@
-/* Self-hosted so the app never reaches the network for type. Extracted
-   from the design mockup; Cormorant Garamond and Lora are SIL OFL. */
+/* Self-hosted so the app works offline. Cormorant Garamond and Lora are SIL OFL. */
 
 @font-face {
   font-family: "Cormorant Garamond";
