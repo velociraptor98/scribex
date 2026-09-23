@@ -11,9 +11,11 @@
 //! `only_cached` is the offline switch: when true the bundle refuses all network
 //! access and any resource missing from the local cache fails the build.
 
-use std::path::{Path, PathBuf};
+use std::io::Write;
+use std::path::{Component, Path, PathBuf};
 use tectonic::config::PersistentConfig;
 use tectonic::driver::{OutputFormat, ProcessingSessionBuilder};
+use tectonic::io::memory::MemoryFileCollection;
 use tectonic::status::StatusBackend;
 
 pub struct CompileOk {
@@ -67,6 +69,58 @@ fn missing_file_from_log(log: &str) -> Option<String> {
     None
 }
 
+/// A bare file name that stays inside the directory it is joined to: no
+/// separators, no `..`, not absolute. TeX's `\openout` takes any name the
+/// document gives it, and `Path::join` with an absolute path discards the base.
+fn is_plain_name(name: &str) -> bool {
+    let mut parts = Path::new(name).components();
+    matches!((parts.next(), parts.next()), (Some(Component::Normal(_)), None))
+}
+
+/// Refuse a build directory that is not a real directory. A project arrives
+/// with whatever `.scribex-build` its author left in it, and a symlink there
+/// would send every output file wherever it points.
+fn ensure_real_dir(dir: &Path) -> Result<(), String> {
+    match std::fs::symlink_metadata(dir) {
+        Ok(m) if m.file_type().is_dir() => Ok(()),
+        Ok(_) => Err(format!("{} is not a directory; refusing to build into it", dir.display())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            std::fs::create_dir_all(dir).map_err(|e| format!("cannot create output dir: {e}"))
+        }
+        Err(e) => Err(format!("cannot inspect output dir: {e}")),
+    }
+}
+
+/// Write the engine's in-memory outputs into `out_dir`.
+///
+/// Tectonic would otherwise write them itself, to `out_dir.join(name)` for
+/// every name the document chose, so a hostile document could create or
+/// overwrite any file the user can (`~/.zshrc`, a LaunchAgent). Only plain names
+/// are written here, and an existing entry is replaced rather than written
+/// through, so a planted symlink cannot redirect the write either.
+fn write_outputs(files: &MemoryFileCollection, out_dir: &Path) -> Result<(), String> {
+    for (name, file) in files {
+        if !is_plain_name(name) || file.data.is_empty() {
+            continue;
+        }
+        let dest = out_dir.join(name);
+        match std::fs::remove_file(&dest) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(format!("cannot replace {name}: {e}")),
+        }
+        // `create_new` is O_EXCL, which also refuses to follow a symlink that
+        // appeared since the removal.
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&dest)
+            .and_then(|mut f| f.write_all(&file.data))
+            .map_err(|e| format!("cannot write {name}: {e}"))?;
+    }
+    Ok(())
+}
+
 /// Typeset `source` as if it were the file at `entry`, without touching that
 /// file. The editor buffer is fed to the engine directly, so live preview never
 /// writes to the user's document — only `save_document` does.
@@ -76,8 +130,8 @@ fn missing_file_from_log(log: &str) -> Option<String> {
 ///
 /// `entry`'s directory is still the filesystem root, so `\input`,
 /// `\includegraphics` and friends resolve against the real project on disk.
-/// Intermediates and the PDF land in `out_dir`, which is kept between runs so
-/// aux/toc files survive and multi-pass documents converge.
+/// Intermediates and the PDF land in `out_dir` (see `write_outputs`), which is
+/// kept between runs so aux/toc files survive and multi-pass documents converge.
 pub fn compile(
     entry: &Path,
     source: &str,
@@ -101,9 +155,7 @@ pub fn compile(
         .and_then(|s| s.to_str())
         .unwrap_or("main.tex");
 
-    if let Err(e) = std::fs::create_dir_all(out_dir) {
-        return Err(fail(format!("cannot create output dir: {e}"), String::new()));
-    }
+    ensure_real_dir(out_dir).map_err(|e| fail(e, String::new()))?;
 
     let config = PersistentConfig::open(false)
         .map_err(|e| fail(format!("tectonic config: {e}"), String::new()))?;
@@ -121,28 +173,36 @@ pub fn compile(
         .format_name("latex")
         .format_cache_path(fmt_cache)
         .filesystem_root(root)
-        .output_dir(out_dir)
+        // Outputs stay in memory; `write_outputs` puts the safe ones on disk.
+        .do_not_write_output_files()
         .output_format(OutputFormat::Pdf)
-        .keep_logs(true)
-        .keep_intermediates(true)
         .print_stdout(false);
 
     let stem = Path::new(name).file_stem().and_then(|s| s.to_str()).unwrap_or("main");
-    let read_log = || std::fs::read_to_string(out_dir.join(format!("{stem}.log"))).unwrap_or_default();
+    let log_of = |files: &MemoryFileCollection| {
+        files
+            .get(&format!("{stem}.log"))
+            .map(|f| String::from_utf8_lossy(&f.data).into_owned())
+            .unwrap_or_default()
+    };
 
     let mut sess = sb
         .create(status)
-        .map_err(|e| fail(format!("session: {e}"), read_log()))?;
+        .map_err(|e| fail(format!("session: {e}"), String::new()))?;
 
-    sess.run(status)
-        .map_err(|e| fail(e.to_string(), read_log()))?;
-
-    // The parent reads the PDF itself; only confirm one was written.
-    if !out_dir.join(format!("{stem}.pdf")).exists() {
-        return Err(fail("no PDF produced".into(), read_log()));
+    let run = sess.run(status);
+    let files = sess.into_file_data();
+    let log = log_of(&files);
+    if let Err(e) = run {
+        return Err(fail(e.to_string(), log));
     }
 
-    Ok(CompileOk { log: read_log(), duration_ms: ms(started) })
+    if !files.contains_key(&format!("{stem}.pdf")) {
+        return Err(fail("no PDF produced".into(), log));
+    }
+    write_outputs(&files, out_dir).map_err(|e| fail(e, log.clone()))?;
+
+    Ok(CompileOk { log, duration_ms: ms(started) })
 }
 
 /// A document that touches the resources a cold cache is most likely to lack:
@@ -170,4 +230,81 @@ pub fn out_dir_for(entry: &Path) -> PathBuf {
         .parent()
         .unwrap_or(Path::new("."))
         .join(".scribex-build")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tectonic::io::memory::MemoryFileInfo;
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("scribex-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn outputs(entries: &[(&str, &str)]) -> MemoryFileCollection {
+        entries
+            .iter()
+            .map(|(n, d)| (n.to_string(), MemoryFileInfo { data: d.as_bytes().to_vec(), unix_mtime: None }))
+            .collect()
+    }
+
+    #[test]
+    fn plain_names_only() {
+        assert!(is_plain_name("doc.pdf"));
+        assert!(is_plain_name(".hidden"));
+        for bad in ["", ".", "..", "../x", "a/b", "/tmp/x", "./x"] {
+            assert!(!is_plain_name(bad), "{bad:?} should be rejected");
+        }
+    }
+
+    #[test]
+    fn escaping_names_are_not_written() {
+        let dir = scratch("escape");
+        let out = dir.join("out");
+        std::fs::create_dir(&out).unwrap();
+        let abs = dir.join("abs.txt");
+        let files = outputs(&[
+            ("doc.pdf", "pdf"),
+            ("../rel.txt", "x"),
+            (abs.to_str().unwrap(), "x"),
+            ("", "stdout"),
+        ]);
+
+        write_outputs(&files, &out).unwrap();
+
+        assert_eq!(std::fs::read_to_string(out.join("doc.pdf")).unwrap(), "pdf");
+        assert!(!dir.join("rel.txt").exists());
+        assert!(!abs.exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn planted_symlink_is_replaced_not_followed() {
+        let dir = scratch("symlink");
+        let out = dir.join("out");
+        std::fs::create_dir(&out).unwrap();
+        let target = dir.join("victim");
+        std::fs::write(&target, "original").unwrap();
+        std::os::unix::fs::symlink(&target, out.join("doc.aux")).unwrap();
+
+        write_outputs(&outputs(&[("doc.aux", "aux")]), &out).unwrap();
+
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "original");
+        assert!(!std::fs::symlink_metadata(out.join("doc.aux")).unwrap().file_type().is_symlink());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn symlinked_build_dir_is_refused() {
+        let dir = scratch("linkdir");
+        std::fs::create_dir(dir.join("elsewhere")).unwrap();
+        std::os::unix::fs::symlink(dir.join("elsewhere"), dir.join(".scribex-build")).unwrap();
+
+        assert!(ensure_real_dir(&dir.join(".scribex-build")).is_err());
+        assert!(ensure_real_dir(&dir.join("fresh")).is_ok());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
