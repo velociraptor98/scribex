@@ -8,7 +8,7 @@ interface Props {
   /** Raw PDF bytes; null before the first successful build. */
   data: Uint8Array | null;
   zoom: number;
-  /** Reports page count and the page currently in view, for the recto footer. */
+  /** Page count and the page in view, for the footer under the preview. */
   onPages?: (total: number) => void;
   onPage?: (current: number) => void;
 }
@@ -88,7 +88,7 @@ export default function PdfView({ data, zoom, onPages, onPage }: Props) {
   return (
     <div className="pdf" ref={host} onScroll={(e) => trackPage(e.currentTarget)}>
       {error && <div className="pdf-error selectable">{error}</div>}
-      {!data && !error && <div className="pdf-empty">Nothing set yet</div>}
+      {!data && !error && <div className="pdf-empty">Nothing built yet</div>}
     </div>
   );
 }

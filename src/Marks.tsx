@@ -2,7 +2,7 @@ import { Diagnostic, Fix, PressRow } from "./texlog";
 
 interface MarksProps {
   diags: Diagnostic[];
-  /** True once a build has completed, so "set cleanly" is a claim we can make. */
+  /** True once a build has completed, so "built cleanly" is a claim we can make. */
   built: boolean;
   onGoto: (line: number) => void;
   onFix: (fix: Fix) => void;

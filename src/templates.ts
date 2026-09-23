@@ -1,5 +1,5 @@
-/** Templates offered on the welcome screen. Each is a complete document that
- *  typesets on a cold cache. */
+/** Templates offered on the welcome screen. The first-run download fetches
+ *  everything they use, so each builds offline. */
 
 export interface Plate {
   name: string;

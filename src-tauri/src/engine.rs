@@ -165,7 +165,6 @@ $\mathbb{R}\ \mathcal{L}\ \mathfrak{g}\ \alpha\beta\gamma$
 \end{document}
 "#;
 
-/// Where compiled output for a given entry file lives.
 pub fn out_dir_for(entry: &Path) -> PathBuf {
     entry
         .parent()

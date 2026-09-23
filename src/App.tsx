@@ -69,9 +69,8 @@ export default function App() {
   const [cache, setCache] = useState<CacheState>("unknown");
   const [setup, setSetup] = useState<SetupProgress>({ files: 0 });
   const settingUp = useRef(false);
-  // No document opens until the first-run download has finished: without it
-  // nothing can be built, so the editor would only show a failure. Read through
-  // a ref by `adopt`, which the shortcut listener holds from the first render.
+  // No document opens until the first-run download has finished. `adopt` is
+  // memoised, so it reads this through a ref.
   const locked = cache !== "ready";
   const lockedRef = useRef(locked);
   lockedRef.current = locked;
@@ -89,7 +88,7 @@ export default function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [selection, setSelection] = useState("");
-  /** Marks the reader has waved through; cleared on every new build. */
+  /** Issues the reader has ignored; cleared on every new build. */
   const [ignored, setIgnored] = useState<string[]>([]);
   const [keys, setKeys] = useState<{ keys: string[]; name?: string }>({ keys: [] });
 
@@ -98,7 +97,7 @@ export default function App() {
   const scratchPath = useRef<string | null>(null);
   const seq = useRef(0);
   // The source that produced the PDF on screen, so the export sheet knows
-  // whether the paper size it shows is the one that was actually set.
+  // whether the paper size it shows is the one that was actually built.
   const built = useRef<string>("");
 
   const sections = useMemo(() => outline(source), [source]);
@@ -149,8 +148,8 @@ export default function App() {
         // has overtaken. Leave the status alone — the newer build owns it now.
         if (err.superseded || mine !== seq.current) return;
         if (isColdCache(err)) {
-          // Not the document's fault, so no issues and no "Build failed": point
-          // at the setup instead. Also catches a cache cleared since setup ran.
+          // Not the document's fault: point at the setup instead of listing
+          // issues. Also catches a cache cleared since setup ran.
           setCache((c) => (c === "downloading" || c === "failed" ? c : "cold"));
           setDiags([]);
           setPress([]);
@@ -168,9 +167,8 @@ export default function App() {
         setMissing(err.missing_file ?? null);
         setBuildMs(err.duration_ms);
         setStatus(err.missing_file ? `Missing: ${err.missing_file}` : "Build failed");
-        // The last good preview stays on screen and the Issues tab lights up.
-        // Switching panes for the reader would yank them out of the proof on
-        // every half-typed command while setting as they type.
+        // Stay on the last good preview. Switching to Issues here would do it
+        // on every half-typed command while building as you type.
       } finally {
         if (mine === seq.current) {
           setBusy(false);
@@ -192,8 +190,7 @@ export default function App() {
     })();
   }, []);
 
-  // The engine announces each package or font it downloads, whichever build or
-  // priming run asked for it.
+  // Each package or font the engine downloads, from any build or setup run.
   useEffect(() => {
     const pending = listen<string>("fetching", (e) => {
       setFetched((names) => [...names, e.payload]);
@@ -375,7 +372,7 @@ export default function App() {
     try {
       if (rebuild) {
         setStatus("Building for export…");
-        // Bypass `build` so the on-screen proof is not replaced by the variant.
+        // Bypass `build` so the on-screen preview is not replaced by the variant.
         seq.current++;
         await invoke<CompileOk>("compile_latex", {
           path: target,
@@ -399,17 +396,14 @@ export default function App() {
     } finally {
       setBusy(false);
       setFetched([]);
-      // Restore the proof, which the export build may have overwritten on disk.
+      // Restore the preview, which the export build may have overwritten on disk.
       if (rebuild) build(source);
     }
   }
 
-  // The first-run download: the common package and font set plus everything
-  // the plates use, so that everyday editing works with the network off. Also
-  // what "Download the LaTeX essentials" re-runs later. See docs/OFFLINE.md.
-  //
-  // Deliberately not `busy`: builds may queue behind it (they wait for the
-  // engine, then set offline from the fresh cache), and writing carries on.
+  // The first-run download of everything the warmup set and plates use. See
+  // docs/OFFLINE.md. Not `busy`: builds queue behind it and then succeed from
+  // the fresh cache.
   async function setUp() {
     if (settingUp.current) return;
     settingUp.current = true;
@@ -526,17 +520,11 @@ export default function App() {
     return () => { pending.then((unlisten) => unlisten()); };
   }, []);
 
-  // Confirm before discarding unsaved work.
-  //
-  // `beforeunload` does not stop a native window close in a Tauri webview — no
-  // dialog appears and the edits are simply gone — so the guard hangs off
-  // Tauri's own close-requested event. Once a listener is registered Tauri
-  // holds the close and destroys the window only if the handler lets it, so
-  // cancelling means calling preventDefault. ⌘Q arrives here too; see
-  // `build_menu` in lib.rs for why that needs help.
-  //
-  // A document that autosaves is written back instead of asked about; the
-  // guard only fires if that write fails or there is no file to write to.
+  // Confirm before discarding unsaved work. `beforeunload` does not stop a
+  // native window close in Tauri, so this uses the close-requested event, where
+  // preventDefault cancels the close. ⌘Q arrives here too; see `build_menu` in
+  // lib.rs. Autosaving documents are written back first, so the prompt only
+  // appears if that fails or the document has no file yet.
   const unsaved = useRef({ dirty, name, path, source, autoSave });
   unsaved.current = { dirty, name, path, source, autoSave };
   useEffect(() => {

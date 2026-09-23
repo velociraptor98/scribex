@@ -51,11 +51,10 @@ export function withHyperref(source: string): string {
 export interface ExportOptions {
   sheet: Sheet;
   hyperlinks: boolean;
-  /** Write the .tex next to the PDF, so the source travels with the proof. */
+  /** Write the .tex next to the PDF. */
   sourceAlongside: boolean;
 }
 
-/** Whether the options require a rebuild before the copy. */
 export function needsRebuild(o: ExportOptions, docSheet: Sheet): boolean {
   return o.sheet !== docSheet || o.hyperlinks;
 }

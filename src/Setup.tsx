@@ -1,9 +1,6 @@
-/** The first-run download of the LaTeX essentials.
- *
- *  Tectonic ships engines, not packages or fonts, so a new install cannot set
- *  anything until those have been fetched once (see docs/OFFLINE.md). This is
- *  where the reader is asked for that download and watches it happen: a card on
- *  the title page, a banner above the editor. */
+/** The first-run download of the LaTeX packages and fonts, without which
+ *  nothing builds (see docs/OFFLINE.md). A card on the welcome screen, or a
+ *  banner above the editor. */
 
 export type CacheState = "unknown" | "cold" | "downloading" | "failed" | "ready";
 

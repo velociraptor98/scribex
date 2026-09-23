@@ -19,9 +19,8 @@
 .linkish:disabled { opacity: 0.4; cursor: default; }
 .sep { color: var(--text-24); }
 
-/* ── title bar ───────────────────────────────────────────────────────────
-   The window uses an overlay title bar, so macOS draws the real traffic
-   lights over the left of this strip. `titlebar-lights` is the room they need. */
+/* ── title bar ─────────────────────────────────────────────────────────── */
+/* macOS draws the traffic lights over the left; `titlebar-lights` makes room. */
 
 .titlebar {
   display: flex;
@@ -62,8 +61,7 @@
 /* Network allowed is the exceptional state, so it is the one that is hollow. */
 .lamp-dot.is-open { background: transparent; box-shadow: inset 0 0 0 1px var(--accent); }
 
-/* A package or font is coming down the wire. Sits left of the lamp so the two
-   read together: what the engine may do, and what it is doing. */
+/* A package or font downloading, beside the offline lamp. */
 .titlebar-right { gap: 16px; align-items: center; }
 .fetching {
   display: flex;
@@ -82,8 +80,7 @@
   animation: pulse 1.1s ease-in-out infinite;
 }
 
-/* Autosave, held on screen briefly: pulsing while it writes, then a quiet
-   confirmation that fades out. */
+/* Autosave: pulses while writing, then briefly confirms. */
 .autosave {
   display: flex;
   align-items: center;
@@ -120,8 +117,7 @@
 .banner code { font-family: var(--font-mono); color: var(--accent-300); }
 .banner-note { color: var(--text-38); font-style: italic; }
 
-/* ── first-run download ──────────────────────────────────────────────────
-   The title-page card, and the same state as a one-line banner in the editor. */
+/* ── first-run download ──────────────────────────────────────────────────── */
 
 .setup {
   margin-top: 40px;
@@ -165,7 +161,7 @@
 .setup-banner .setup-count { font-size: inherit; }
 .setup-banner .setup-bar { align-self: center; flex: 0 0 140px; }
 
-/* ── the spread: contents · source · proof ───────────────────────────────── */
+/* ── the spread: contents · source · preview ─────────────────────────────── */
 
 .spread { display: flex; flex: 1; min-height: 0; }
 
@@ -284,7 +280,7 @@
 .recto-tab:hover:not(:disabled) { color: var(--text-70); }
 .recto-tab.is-on { color: var(--accent); border-bottom-color: var(--accent); }
 .recto-tab:disabled { opacity: 0.4; cursor: default; }
-/* The build failed. The preview stays put; the Issues tab carries the news instead. */
+/* A failed build flags the Issues tab rather than switching to it. */
 .recto-tab.is-alert:not(.is-on) { color: var(--accent-300); }
 .recto-export { margin-left: auto; }
 
@@ -306,7 +302,7 @@
 .is-working { animation: pulse 1.1s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.45; } }
 
-/* ── the proof ───────────────────────────────────────────────────────────── */
+/* ── the preview ─────────────────────────────────────────────────────────── */
 
 .pdf {
   flex: 1;
@@ -332,7 +328,7 @@
   text-align: left;
 }
 
-/* ── marks on this proof ─────────────────────────────────────────────────── */
+/* ── issues ──────────────────────────────────────────────────────────────── */
 
 .marks { flex: 1; min-height: 0; overflow-y: auto; }
 .marks > .rubric { margin-bottom: 18px; }
@@ -448,9 +444,7 @@
   flex-direction: column;
   overflow-y: auto;
 }
-/* Logo 2a: the crossed-integral mark set against the wordmark. Both are sized
-   in em off the lockup, so one font-size keeps the doc's mark-to-word ratio
-   (104:58) and its gap intact at every breakpoint. */
+/* Mark and wordmark are sized in em, so one font-size scales the whole lockup. */
 .welcome-lockup {
   display: flex;
   align-items: center;
@@ -778,7 +772,7 @@
 }
 .imprint-actions { display: flex; gap: 10px; }
 
-/* Narrow windows: the proof column is the first thing to give. */
+/* Narrow windows: the preview column is the first thing to give. */
 @media (max-width: 1040px) {
   .contents { width: 150px; padding: 22px 14px; }
   .recto { padding: 0 20px 22px; min-width: 300px; }

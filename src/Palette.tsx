@@ -1,7 +1,6 @@
-/** The ⌘K palette: plain English in, LaTeX out.
- *
- *  It is also where the app's own commands live. Snippet suggestions rank above commands when the query looks like a
- *  request for LaTeX, and below them when it names a command. */
+/** The ⌘K palette: plain English in, LaTeX out, plus the app's own commands.
+ *  Snippets rank above commands when the query looks like a request for LaTeX,
+ *  and below them when it names a command. */
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Suggestion, suggest, tokenize } from "./commands";

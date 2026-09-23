@@ -101,7 +101,6 @@ fn set_offline(state: tauri::State<'_, Mutex<Settings>>, offline: bool) {
     state.lock().unwrap().only_cached = offline;
 }
 
-/// Path of the PDF a build for `entry` produces.
 fn pdf_path_for(entry: &Path) -> PathBuf {
     engine::out_dir_for(entry).join(
         entry
@@ -216,23 +215,16 @@ fn app_data(app: &tauri::AppHandle) -> Result<PathBuf, CompileErr> {
         .map_err(|e| err(format!("cannot locate app data: {e}")))
 }
 
-/// Whether the first-run download has completed on this machine.
-///
-/// A marker rather than a probe build: on an empty cache a probe takes seconds
-/// to fail, and the answer is wanted before the first screen settles. If the
-/// cache is cleared behind our back the marker lies, and the frontend falls
-/// back on recognising the failed build (see `isColdCache` in App.tsx).
+/// Whether the first-run download has completed on this machine. A marker
+/// rather than a probe build, which takes seconds to fail on an empty cache. If
+/// the cache is cleared later, `isColdCache` in App.tsx catches the failure.
 #[tauri::command]
 fn cache_ready(app: tauri::AppHandle) -> Result<bool, CompileErr> {
     Ok(app_data(&app)?.join(READY_MARKER).exists())
 }
 
-/// Prime the offline cache: the common package and font set, then each of
-/// `documents` (the built-in plates), so that everything the app offers works
-/// with the network off. Each document is its own job; `fetching` events report
-/// progress throughout.
-///
-/// An interrupted run can simply be retried: what already arrived stays cached.
+/// Prime the offline cache with the warmup set, then each of `documents` (the
+/// built-in plates). An interrupted run can be retried; what arrived stays cached.
 #[tauri::command]
 async fn warmup_cache(
     app: tauri::AppHandle,
@@ -246,9 +238,7 @@ async fn warmup_cache(
 
     let jobs = std::iter::once(engine::WARMUP.to_string()).chain(documents.unwrap_or_default());
     for (i, source) in jobs.enumerate() {
-        // Queued like any other job: it shares the resource cache the builds
-        // read. Never dropped — priming *is* the cache write, so skipping it
-        // would leave the user with a stale banner and a cold cache.
+        // Never dropped as superseded: the cache write is the point.
         typeset(
             &app,
             &builds,
