@@ -9,11 +9,17 @@ interface Props {
   onOpenRecent: (doc: RecentDoc) => void;
   onPlate: (plate: Plate) => void;
   onSearch: () => void;
+  /** True until the first-run download has finished; nothing can be opened. */
+  locked: boolean;
+  /** The first-run download card, when there is one to show. */
+  setup?: React.ReactNode;
 }
 
 export default function Welcome({
-  recent, onNew, onOpen, onOpenRecent, onPlate, onSearch,
+  recent, onNew, onOpen, onOpenRecent, onPlate, onSearch, locked, setup,
 }: Props) {
+  const why = locked ? "Available once the one-time download has finished" : undefined;
+
   return (
     <div className="screen">
       <TitleBar />
@@ -31,9 +37,11 @@ export default function Welcome({
           <div className="welcome-rule" />
 
           <div className="welcome-actions">
-            <button className="btn btn-primary" onClick={onNew}>New document</button>
-            <button className="btn" onClick={onOpen}>Open…</button>
+            <button className="btn btn-primary" onClick={onNew} disabled={locked} title={why}>New document</button>
+            <button className="btn" onClick={onOpen} disabled={locked} title={why}>Open…</button>
           </div>
+
+          {setup}
 
           <div className="welcome-plates">
             <div className="hairline" />
@@ -41,7 +49,7 @@ export default function Welcome({
               <span>Start from a plate —</span>
               {PLATES.map((p, i) => (
                 <span key={p.name}>
-                  <button className="linkish" onClick={() => onPlate(p)} title={p.note}>
+                  <button className="linkish" onClick={() => onPlate(p)} disabled={locked} title={why ?? p.note}>
                     {p.name}
                   </button>
                   {i < PLATES.length - 1 && <span className="sep"> · </span>}
@@ -61,7 +69,7 @@ export default function Welcome({
           ) : (
             <div className="recent-list">
               {recent.map((d) => (
-                <button key={d.path} className="recent" onClick={() => onOpenRecent(d)}>
+                <button key={d.path} className="recent" onClick={() => onOpenRecent(d)} disabled={locked} title={why}>
                   <span className="recent-plate" aria-hidden />
                   <span className="recent-main">
                     <span className="recent-title">{d.title}</span>

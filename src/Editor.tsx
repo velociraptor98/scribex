@@ -9,7 +9,7 @@ import { tags as t } from "@lezer/highlight";
 import { latexLanguage, latexCompletion } from "./latex";
 import { CARET } from "./commands";
 
-/** Imperative handle used by the palette and by the marks' quick fixes. */
+/** Imperative handle used by the palette and by the issues' quick fixes. */
 export interface EditorHandle {
   /** Insert at the caret, replacing any selection. A CARET marker in `text`
    *  sets where the caret lands; otherwise it lands after the insertion. */
@@ -32,7 +32,6 @@ interface Props {
   onSelection?: (text: string) => void;
 }
 
-/* Set on a 28px rhythm so the lines align with the typeset page beside them. */
 const latexHighlight = HighlightStyle.define([
   { tag: t.tagName, color: "var(--accent)" },
   { tag: [t.atom, t.keyword], color: "var(--accent-400)" },
@@ -49,6 +48,7 @@ const theme = EditorView.theme(
     ".cm-scroller": {
       fontFamily: "var(--font-mono)",
       fontSize: "13px",
+      // A 28px rhythm, so lines align with the page beside them.
       lineHeight: "28px",
       padding: "34px 30px 40px 0",
     },

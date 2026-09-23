@@ -42,6 +42,37 @@ exercising the common package and font set to avoid that. It needs the network
 once. Deciding what else belongs in a shipped bundle is the main open design
 question — see "Next" below.
 
+## First launch
+
+On an empty cache nothing builds at all, not even `hello world`: the engine
+fails with `failed to open input file "tectonic-format-latex.tex"` before any
+package is read, so there is no missing file for the banner to offer. The app
+treats that failure as "not set up yet" (`isColdCache` in `App.tsx`) and asks
+for a one-time download instead of reporting a build error.
+
+The download (`warmup_cache`) builds `WARMUP` and then each plate with the
+network allowed, so every document the app offers works offline afterwards.
+On success it writes a `cache-ready` marker in the app data directory; the
+start screen offers the download for as long as that marker is absent. It is
+one click rather than automatic, because the offline toggle promises no
+network access the user did not ask for.
+
+Measured from an empty cache (September 2026):
+
+| Step | Files | Time |
+|---|---|---|
+| `WARMUP` | 326 | 77 s |
+| Letter, Thesis plates | 3 | ~3 s |
+| Beamer plate | 114 | 28 s |
+| **Total** | **~443 (45 MB)** | **~105 s** |
+
+Downloads are strictly sequential inside Tectonic, which is why this is slow.
+Progress comes from the `fetching` event sent for each downloaded file (see `worker.rs`); `SETUP_FILES` in
+`Setup.tsx` is the expected total and only paces the bar.
+
+To reproduce a first launch without touching the real cache, point
+`TECTONIC_CACHE_DIR` at an empty directory and delete the `cache-ready` marker.
+
 ## Why typesetting runs in a subprocess
 
 `engine.rs` must only be called from the worker process (`scribex --typeset`).

@@ -14,7 +14,7 @@
 use std::path::{Path, PathBuf};
 use tectonic::config::PersistentConfig;
 use tectonic::driver::{OutputFormat, ProcessingSessionBuilder};
-use tectonic::status::NoopStatusBackend;
+use tectonic::status::StatusBackend;
 
 pub struct CompileOk {
     pub log: String,
@@ -69,7 +69,10 @@ fn missing_file_from_log(log: &str) -> Option<String> {
 
 /// Typeset `source` as if it were the file at `entry`, without touching that
 /// file. The editor buffer is fed to the engine directly, so live preview never
-/// writes to the user's document — saving is always explicit.
+/// writes to the user's document — only `save_document` does.
+///
+/// `status` hears Tectonic's progress notes, including each resource it
+/// downloads; the worker forwards those to the GUI.
 ///
 /// `entry`'s directory is still the filesystem root, so `\input`,
 /// `\includegraphics` and friends resolve against the real project on disk.
@@ -80,6 +83,7 @@ pub fn compile(
     source: &str,
     out_dir: &Path,
     only_cached: bool,
+    status: &mut dyn StatusBackend,
 ) -> Result<CompileOk, CompileErr> {
     let started = std::time::Instant::now();
     let ms = |t: std::time::Instant| t.elapsed().as_millis() as u64;
@@ -101,7 +105,6 @@ pub fn compile(
         return Err(fail(format!("cannot create output dir: {e}"), String::new()));
     }
 
-    let mut status = NoopStatusBackend::default();
     let config = PersistentConfig::open(false)
         .map_err(|e| fail(format!("tectonic config: {e}"), String::new()))?;
     let bundle = config
@@ -128,10 +131,10 @@ pub fn compile(
     let read_log = || std::fs::read_to_string(out_dir.join(format!("{stem}.log"))).unwrap_or_default();
 
     let mut sess = sb
-        .create(&mut status)
+        .create(status)
         .map_err(|e| fail(format!("session: {e}"), read_log()))?;
 
-    sess.run(&mut status)
+    sess.run(status)
         .map_err(|e| fail(e.to_string(), read_log()))?;
 
     // The parent reads the PDF itself; only confirm one was written.
@@ -162,7 +165,6 @@ $\mathbb{R}\ \mathcal{L}\ \mathfrak{g}\ \alpha\beta\gamma$
 \end{document}
 "#;
 
-/// Where compiled output for a given entry file lives.
 pub fn out_dir_for(entry: &Path) -> PathBuf {
     entry
         .parent()

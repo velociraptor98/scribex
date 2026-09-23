@@ -92,9 +92,9 @@ export function stats(source: string): DocStats {
   };
 }
 
-/** Bibliography keys defined in a .bib file, for resolving citation typos. */
 const BIB_ENTRY = /@\w+\s*\{\s*([^,\s}]+)/g;
 
+/** Bibliography keys defined in a .bib file, for resolving citation typos. */
 export function bibKeys(bib: string): string[] {
   return [...bib.matchAll(BIB_ENTRY)].map((m) => m[1]);
 }

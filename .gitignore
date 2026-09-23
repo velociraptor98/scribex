@@ -25,3 +25,13 @@ dist-ssr
 
 # ScribeX build output
 .scribex-build/
+
+# Personal learning workspace (Rust + Tauri lessons) — never commit
+/MISSION.md
+/RESOURCES.md
+/NOTES.md
+/GLOSSARY.md
+/lessons/
+/reference/
+/learning-records/
+/assets/

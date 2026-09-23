@@ -97,7 +97,7 @@ export default function ExportSheet({
               disabled={busy}
               onClick={() => onExport({ sheet, hyperlinks, sourceAlongside })}
             >
-              {busy ? "Setting…" : "Export PDF"}
+              {busy ? "Building…" : "Export PDF"}
             </button>
           </div>
         </div>
@@ -106,7 +106,7 @@ export default function ExportSheet({
   );
 }
 
-/** Most proofs are tens of kilobytes; "0.02 MB" tells the reader nothing. */
+/** Most PDFs here are tens of kilobytes; "0.02 MB" tells the reader nothing. */
 function size(bytes: number): string {
   return bytes < 1024 * 1024
     ? `${Math.round(bytes / 1024)} KB`
