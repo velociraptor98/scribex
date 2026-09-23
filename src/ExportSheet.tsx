@@ -97,7 +97,7 @@ export default function ExportSheet({
               disabled={busy}
               onClick={() => onExport({ sheet, hyperlinks, sourceAlongside })}
             >
-              {busy ? "Setting…" : "Export PDF"}
+              {busy ? "Building…" : "Export PDF"}
             </button>
           </div>
         </div>

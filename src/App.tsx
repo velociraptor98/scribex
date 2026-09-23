@@ -12,11 +12,12 @@ import TitleBar from "./TitleBar";
 import Welcome from "./Welcome";
 import Palette, { AppCommand } from "./Palette";
 import ExportSheet from "./ExportSheet";
+import Setup, { CacheState, SetupProgress } from "./Setup";
 import { Marks, PressLog } from "./Marks";
 
 import { bibKeys, outline, stats } from "./latex";
 import { Diagnostic, Fix, PressRow, markKey, parseLog, pressLog } from "./texlog";
-import { ARTICLE, Plate } from "./templates";
+import { ARTICLE, PLATES, Plate } from "./templates";
 import { RecentDoc, documentTitle, loadRecent, remember } from "./recent";
 import { ExportOptions, applyOptions, needsRebuild, sheetOf } from "./exporting";
 import { CARET, selectionToTable } from "./commands";
@@ -32,7 +33,19 @@ interface CompileErr {
   superseded?: boolean;
 }
 
+/** A build that failed because nothing has been downloaded yet: without the
+ *  format file the engine cannot even start, so the log says nothing useful. */
+function isColdCache(err: CompileErr): boolean {
+  return /tectonic-format-/.test(err.message ?? "");
+}
+
 const DEBOUNCE_MS = 600;
+/** How often unsaved edits are written back to the document's file. */
+const AUTOSAVE_MS = 10_000;
+/** How long the autosave indicator lingers. A save takes a few milliseconds,
+ *  far too quick to see without holding it on screen. */
+const SAVING_SHOWN_MS = 700;
+const SAVED_SHOWN_MS = 2000;
 
 type Screen = "welcome" | "editor";
 type RightPane = "proof" | "marks";
@@ -50,6 +63,20 @@ export default function App() {
   const [missing, setMissing] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1.3);
   const [autoBuild, setAutoBuild] = useState(true);
+  const [autoSave, setAutoSave] = useState(true);
+  const [autosaving, setAutosaving] = useState<"idle" | "saving" | "saved">("idle");
+  const autosaveShown = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [cache, setCache] = useState<CacheState>("unknown");
+  const [setup, setSetup] = useState<SetupProgress>({ files: 0 });
+  const settingUp = useRef(false);
+  // No document opens until the first-run download has finished: without it
+  // nothing can be built, so the editor would only show a failure. Read through
+  // a ref by `adopt`, which the shortcut listener holds from the first render.
+  const locked = cache !== "ready";
+  const lockedRef = useRef(locked);
+  lockedRef.current = locked;
+  /** Resources the engine has downloaded during the build in progress. */
+  const [fetched, setFetched] = useState<string[]>([]);
   const [docKey, setDocKey] = useState(0);
   const [dirty, setDirty] = useState(false);
   const [buildMs, setBuildMs] = useState<number | undefined>();
@@ -98,6 +125,7 @@ export default function App() {
 
       const mine = ++seq.current;
       setBusy(true);
+      setFetched([]);
       setStatus(allowNetwork ? "Fetching packages…" : "Typesetting…");
       try {
         const r = await invoke<CompileOk>("compile_latex", {
@@ -114,12 +142,23 @@ export default function App() {
         setMissing(null);
         setBuildMs(r.duration_ms);
         built.current = src;
-        setStatus(`Set in ${r.duration_ms} ms`);
+        setStatus(`Built in ${r.duration_ms} ms`);
       } catch (e) {
         const err = e as CompileErr;
         // The backend runs one job at a time and drops those a newer request
         // has overtaken. Leave the status alone — the newer build owns it now.
         if (err.superseded || mine !== seq.current) return;
+        if (isColdCache(err)) {
+          // Not the document's fault, so no issues and no "Build failed": point
+          // at the setup instead. Also catches a cache cleared since setup ran.
+          setCache((c) => (c === "downloading" || c === "failed" ? c : "cold"));
+          setDiags([]);
+          setPress([]);
+          setMissing(null);
+          setBuildMs(err.duration_ms);
+          setStatus("Waiting for the one-time download");
+          return;
+        }
         const parsed = parseLog(err.log ?? "", {
           source: src, bibKeys: keys.keys, bibName: keys.name,
         });
@@ -128,11 +167,15 @@ export default function App() {
         setIgnored([]);
         setMissing(err.missing_file ?? null);
         setBuildMs(err.duration_ms);
-        setStatus(err.missing_file ? `Missing: ${err.missing_file}` : "Did not set");
-        // A failed build leaves a stale proof on screen; the marks are the news.
-        if (parsed.length > 0) setRightPane("marks");
+        setStatus(err.missing_file ? `Missing: ${err.missing_file}` : "Build failed");
+        // The last good preview stays on screen and the Issues tab lights up.
+        // Switching panes for the reader would yank them out of the proof on
+        // every half-typed command while setting as they type.
       } finally {
-        if (mine === seq.current) setBusy(false);
+        if (mine === seq.current) {
+          setBusy(false);
+          setFetched([]);
+        }
       }
     },
     [path, keys, name]
@@ -145,7 +188,19 @@ export default function App() {
       const dir = await appLocalDataDir();
       scratchPath.current = `${dir}/scratch.tex`;
       await invoke("set_offline", { offline: true });
+      setCache((await invoke<boolean>("cache_ready").catch(() => false)) ? "ready" : "cold");
     })();
+  }, []);
+
+  // The engine announces each package or font it downloads, whichever build or
+  // priming run asked for it.
+  useEffect(() => {
+    const pending = listen<string>("fetching", (e) => {
+      setFetched((names) => [...names, e.payload]);
+      setStatus(`Downloading ${e.payload}…`);
+      if (settingUp.current) setSetup((p) => ({ files: p.files + 1, current: e.payload }));
+    });
+    return () => { pending.then((unlisten) => unlisten()); };
   }, []);
 
   // Debounced live rebuild, once a document is on screen.
@@ -183,6 +238,10 @@ export default function App() {
 
   const adopt = useCallback(
     (text: string, docPath: string | null, note: string) => {
+      if (lockedRef.current) return;
+      // Write back edits the autosave timer has not reached yet; the buffer is
+      // about to be replaced.
+      flushAutosave();
       setSource(text);
       setPath(docPath);
       setDocKey((k) => k + 1);
@@ -211,6 +270,7 @@ export default function App() {
   );
 
   async function openFile() {
+    if (locked) return;
     const picked = await open({ filters: [{ name: "LaTeX", extensions: ["tex"] }] });
     if (typeof picked !== "string") return;
     try {
@@ -229,6 +289,42 @@ export default function App() {
       setStatus(`${doc.path.split("/").pop()} has moved or been deleted`);
     }
   }
+
+  /** Write the buffer back to its own file without asking. Clears the dirty
+   *  mark only if nothing was typed, and no other document opened, meanwhile. */
+  async function writeBack(target: string, text: string) {
+    clearTimeout(autosaveShown.current);
+    setAutosaving("saving");
+    const started = Date.now();
+    try {
+      await invoke("save_document", { path: target, source: text });
+      const now = unsaved.current;
+      if (now.path === target && now.source === text) setDirty(false);
+      const wait = Math.max(0, SAVING_SHOWN_MS - (Date.now() - started));
+      autosaveShown.current = setTimeout(() => {
+        setAutosaving("saved");
+        autosaveShown.current = setTimeout(() => setAutosaving("idle"), SAVED_SHOWN_MS);
+      }, wait);
+    } catch (e) {
+      setAutosaving("idle");
+      setStatus(`Autosave failed: ${e}`);
+    }
+  }
+
+  /** Autosave now whatever is waiting on the timer. Only a document that already
+   *  has a file autosaves; an untitled one needs ⌘S to choose where it goes. */
+  function flushAutosave() {
+    const u = unsaved.current;
+    if (u.autoSave && u.dirty && u.path) return writeBack(u.path, u.source);
+  }
+
+  // Autosave on a fixed beat rather than after a pause, so a long stretch of
+  // continuous typing is still written back. Ticks with nothing new are no-ops.
+  useEffect(() => {
+    if (!autoSave || !path) return;
+    const t = setInterval(flushAutosave, AUTOSAVE_MS);
+    return () => clearInterval(t);
+  }, [path, autoSave]);
 
   /** Write the buffer to disk, prompting for a location if there isn't one yet. */
   async function saveFile(forceDialog = false) {
@@ -278,7 +374,7 @@ export default function App() {
     setBusy(true);
     try {
       if (rebuild) {
-        setStatus("Setting for export…");
+        setStatus("Building for export…");
         // Bypass `build` so the on-screen proof is not replaced by the variant.
         seq.current++;
         await invoke<CompileOk>("compile_latex", {
@@ -302,26 +398,41 @@ export default function App() {
       setStatus(`Export failed: ${(e as CompileErr).message ?? e}`);
     } finally {
       setBusy(false);
+      setFetched([]);
       // Restore the proof, which the export build may have overwritten on disk.
       if (rebuild) build(source);
     }
   }
 
-  // One-time download of the common package/font set so that everyday editing
-  // works with the network off. See docs/OFFLINE.md.
-  async function primeCache() {
-    setBusy(true);
-    setStatus("Priming offline cache…");
+  // The first-run download: the common package and font set plus everything
+  // the plates use, so that everyday editing works with the network off. Also
+  // what "Download the LaTeX essentials" re-runs later. See docs/OFFLINE.md.
+  //
+  // Deliberately not `busy`: builds may queue behind it (they wait for the
+  // engine, then set offline from the fresh cache), and writing carries on.
+  async function setUp() {
+    if (settingUp.current) return;
+    settingUp.current = true;
+    setCache("downloading");
+    setSetup({ files: 0 });
+    setStatus("Downloading the LaTeX essentials…");
     try {
-      const ms = await invoke<number>("warmup_cache");
-      setStatus(`Cache primed in ${ms} ms`);
+      const ms = await invoke<number>("warmup_cache", { documents: PLATES.map((p) => p.source) });
+      setCache("ready");
       setMissing(null);
-      await build(source);
+      setStatus(`Ready in ${Math.round(ms / 1000)} s — ScribeX now works offline`);
+      // The latest buffer and build, not the ones this call started with: the
+      // download is long enough for the reader to have opened something else.
+      const h = hotkeys.current;
+      if (h.screen === "editor") h.build(h.source);
     } catch (e) {
       // Priming is never dropped as superseded, so anything caught here is real.
-      setStatus(`Priming failed: ${(e as CompileErr).message ?? e}`);
+      setCache("failed");
+      setSetup((p) => ({ ...p, error: (e as CompileErr).message ?? String(e) }));
+      setStatus("The download stopped");
     } finally {
-      setBusy(false);
+      settingUp.current = false;
+      setFetched([]);
     }
   }
 
@@ -366,18 +477,19 @@ export default function App() {
     { id: "save", title: "Save", hint: "⌘S", words: ["write", "disk"], run: () => saveFile(), disabled: !dirty && !!path },
     { id: "saveas", title: "Save as…", hint: "⇧⌘S", words: ["copy", "rename"], run: () => saveFile(true) },
     { id: "export", title: "Export as PDF…", hint: "⌘E", words: ["pdf", "save", "print"], run: () => setExportOpen(true), disabled: !pdf },
-    { id: "open", title: "Open…", hint: "⌘O", words: ["file", "document"], run: openFile },
-    { id: "new", title: "New document", hint: "⌘N", words: ["blank", "start"], run: () => adopt(ARTICLE, null, "New document") },
-    { id: "build", title: "Set now", hint: "⌘R", words: ["build", "compile", "typeset", "rebuild"], run: () => build(source), disabled: busy },
-    { id: "live", title: autoBuild ? "Stop setting as I type" : "Set as I type", words: ["live", "auto", "rebuild", "debounce"], run: () => setAutoBuild((v) => !v) },
+    { id: "open", title: "Open…", hint: "⌘O", words: ["file", "document"], run: openFile, disabled: locked },
+    { id: "new", title: "New document", hint: "⌘N", words: ["blank", "start"], run: () => adopt(ARTICLE, null, "New document"), disabled: locked },
+    { id: "build", title: "Build now", hint: "⌘R", words: ["set", "compile", "typeset", "rebuild"], run: () => build(source), disabled: busy },
+    { id: "live", title: autoBuild ? "Stop building as I type" : "Build as I type", words: ["live", "auto", "rebuild", "debounce", "set"], run: () => setAutoBuild((v) => !v) },
+    { id: "autosave", title: autoSave ? "Stop autosaving" : "Autosave every 10 seconds", words: ["autosave", "auto", "save", "write"], run: () => setAutoSave((v) => !v) },
     { id: "offline", title: offline ? "Allow the network" : "Refuse the network", words: ["offline", "online", "cache"], run: toggleOffline },
-    { id: "zoomin", title: "Enlarge the proof", hint: "⌘+", words: ["zoom", "bigger"], run: () => setZoom((z) => Math.min(3, z + 0.15)) },
-    { id: "zoomout", title: "Reduce the proof", hint: "⌘−", words: ["zoom", "smaller"], run: () => setZoom((z) => Math.max(0.5, z - 0.15)) },
-    { id: "marks", title: "Show the marks", words: ["errors", "warnings", "problems", "proof"], run: () => setRightPane("marks"), disabled: visible.length === 0 },
+    { id: "zoomin", title: "Zoom in on the preview", hint: "⌘+", words: ["enlarge", "bigger", "proof"], run: () => setZoom((z) => Math.min(3, z + 0.15)) },
+    { id: "zoomout", title: "Zoom out of the preview", hint: "⌘−", words: ["reduce", "smaller", "proof"], run: () => setZoom((z) => Math.max(0.5, z - 0.15)) },
+    { id: "marks", title: "Show issues", words: ["errors", "warnings", "problems", "marks"], run: () => setRightPane("marks"), disabled: visible.length === 0 },
     { id: "presslog", title: pressOpen ? "Hide the press log" : "Show the press log", words: ["log", "tex", "passes"], run: () => setPressOpen((v) => !v) },
     { id: "welcome", title: "Back to the title page", words: ["welcome", "home", "recent"], run: () => setScreen("welcome") },
-    { id: "prime", title: "Prime the offline cache", words: ["download", "packages", "fonts"], run: primeCache, disabled: busy },
-  ], [dirty, path, pdf, busy, autoBuild, offline, source, visible.length, pressOpen, adopt, build]);
+    { id: "prime", title: "Download the LaTeX essentials", words: ["prime", "cache", "offline", "packages", "fonts", "setup"], run: setUp, disabled: cache === "downloading" },
+  ], [dirty, path, pdf, busy, cache, locked, autoBuild, autoSave, offline, source, visible.length, pressOpen, adopt, build]);
 
   // Keyboard shortcuts. Held in a ref so the listener always calls the current
   // closure without rebinding on every keystroke.
@@ -422,10 +534,14 @@ export default function App() {
   // holds the close and destroys the window only if the handler lets it, so
   // cancelling means calling preventDefault. ⌘Q arrives here too; see
   // `build_menu` in lib.rs for why that needs help.
-  const unsaved = useRef({ dirty, name });
-  unsaved.current = { dirty, name };
+  //
+  // A document that autosaves is written back instead of asked about; the
+  // guard only fires if that write fails or there is no file to write to.
+  const unsaved = useRef({ dirty, name, path, source, autoSave });
+  unsaved.current = { dirty, name, path, source, autoSave };
   useEffect(() => {
     const pending = getCurrentWindow().onCloseRequested(async (e) => {
+      await flushAutosave();
       if (!unsaved.current.dirty) return;
       const discard = await confirm(
         `"${unsaved.current.name}" has unsaved changes. They will be lost.`,
@@ -457,6 +573,8 @@ export default function App() {
           onOpenRecent={openRecent}
           onPlate={(p: Plate) => adopt(p.source, null, `${p.name} plate`)}
           onSearch={() => setPaletteOpen(true)}
+          locked={locked}
+          setup={<Setup state={cache} progress={setup} onStart={setUp} />}
         />
         {palette}
       </>
@@ -468,19 +586,36 @@ export default function App() {
       <TitleBar
         title={`${name}${dirty ? " ·" : ""}`}
         right={
+          <>
+          {autosaving !== "idle" && (
+            <span className={`autosave${autosaving === "saving" ? " is-saving" : ""}`}>
+              <span className="autosave-dot" />
+              {autosaving === "saving" ? "Autosaving…" : "Autosaved"}
+            </span>
+          )}
+          {fetched.length > 0 && (
+            <span className="fetching" title={fetched.join("\n")}>
+              <span className="fetching-dot" />
+              Downloading {fetched[fetched.length - 1]}
+              {fetched.length > 1 && <span className="tnum"> · {fetched.length}</span>}
+            </span>
+          )}
           <button className="lamp" onClick={toggleOffline}
             title={offline ? "The engine refuses all network access" : "The engine may fetch missing resources"}>
             <span className={`lamp-dot${offline ? "" : " is-open"}`} />
             {offline ? "Offline" : "Network"}
           </button>
+          </>
         }
       />
 
-      {missing && (
+      <Setup compact state={cache} progress={setup} onStart={setUp} />
+
+      {missing && cache === "ready" && (
         <div className="banner">
           <span><code>{missing}</code> is not in the offline cache.</span>
           <button className="btn btn-sm btn-primary" onClick={() => build(source, true)} disabled={busy}>Fetch it</button>
-          <button className="btn btn-sm" onClick={primeCache} disabled={busy}>Prime full cache</button>
+          <button className="btn btn-sm" onClick={setUp} disabled={busy}>Download the essentials</button>
           <span className="banner-note">both need the network, once</span>
         </div>
       )}
@@ -512,8 +647,14 @@ export default function App() {
           </div>
 
           <div className="contents-foot">
-            <span className={`state-dot${dirty ? " is-dirty" : ""}`} />
-            <span className="contents-state">{dirty ? "Unsaved changes" : "Saved"}</span>
+            <span className={`state-dot${dirty ? " is-dirty" : ""}${
+              autosaving === "saving" ? " is-saving" : ""}`} />
+            <span className="contents-state">
+              {autosaving === "saving" ? "Autosaving…"
+                : !dirty ? "Saved"
+                : autoSave && path ? "Unsaved · autosaves every 10 s"
+                : "Unsaved changes"}
+            </span>
           </div>
         </nav>
 
@@ -535,14 +676,15 @@ export default function App() {
               className={`recto-tab${rightPane === "proof" ? " is-on" : ""}`}
               onClick={() => setRightPane("proof")}
             >
-              Proof
+              Preview
             </button>
             <button
-              className={`recto-tab${rightPane === "marks" ? " is-on" : ""}`}
+              className={`recto-tab${rightPane === "marks" ? " is-on" : ""}${
+                visible.some((d) => d.severity === "error") ? " is-alert" : ""}`}
               onClick={() => setRightPane("marks")}
               disabled={visible.length === 0}
             >
-              Marks{visible.length > 0 && ` · ${visible.length}`}
+              Issues{visible.length > 0 && ` · ${visible.length}`}
             </button>
             <button
               className="btn btn-sm recto-export"
@@ -568,7 +710,7 @@ export default function App() {
 
           <div className="recto-foot tnum">
             <span>
-              {pages > 0 ? `Page ${Math.min(page, pages)} of ${pages}` : "No proof yet"}
+              {pages > 0 ? `Page ${Math.min(page, pages)} of ${pages}` : "No preview yet"}
               {" · "}{Math.round(zoom * 100)}%
             </span>
             <span className={busy ? "is-working" : undefined}>{status}</span>

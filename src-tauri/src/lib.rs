@@ -113,8 +113,10 @@ fn pdf_path_for(entry: &Path) -> PathBuf {
 
 /// Typeset `source` in a worker process and return the resulting PDF bytes.
 ///
-/// One job runs at a time; see `Builds`.
+/// One job runs at a time; see `Builds`. Each resource the engine downloads is
+/// announced to the frontend as a `fetching` event carrying its file name.
 async fn typeset(
+    app: &tauri::AppHandle,
     builds: &Builds,
     entry: PathBuf,
     source: String,
@@ -133,7 +135,11 @@ async fn typeset(
     let pdf_path = pdf_path_for(&entry);
 
     let req = worker::Request { entry, source, out_dir, only_cached };
-    let resp = tauri::async_runtime::spawn_blocking(move || worker::run(req))
+    let app = app.clone();
+    let on_fetch = move |name: String| {
+        let _ = app.emit("fetching", name);
+    };
+    let resp = tauri::async_runtime::spawn_blocking(move || worker::run(req, on_fetch))
         .await
         .map_err(|e| err(format!("worker task failed: {e}")))?;
 
@@ -157,6 +163,7 @@ async fn typeset(
 /// Typeset the editor buffer. Does not modify the document on disk.
 #[tauri::command]
 async fn compile_latex(
+    app: tauri::AppHandle,
     settings: tauri::State<'_, Mutex<Settings>>,
     builds: tauri::State<'_, Builds>,
     path: String,
@@ -175,7 +182,7 @@ async fn compile_latex(
         Some(true) => IfSuperseded::Run,
         _ => IfSuperseded::Drop,
     };
-    typeset(&builds, PathBuf::from(&path), source, only_cached, if_superseded).await
+    typeset(&app, &builds, PathBuf::from(&path), source, only_cached, if_superseded).await
 }
 
 /// Write the buffer to disk. The only place the user's document is modified.
@@ -199,30 +206,63 @@ fn export_pdf(path: String, dest: String) -> Result<u64, String> {
     std::fs::copy(&src, &dest).map_err(|e| format!("cannot write {dest}: {e}"))
 }
 
-/// Prime the offline cache with the common package and font set.
+/// Written once the first-run download has completed. Its absence is what
+/// makes the frontend offer that download.
+const READY_MARKER: &str = "cache-ready";
+
+fn app_data(app: &tauri::AppHandle) -> Result<PathBuf, CompileErr> {
+    app.path()
+        .app_local_data_dir()
+        .map_err(|e| err(format!("cannot locate app data: {e}")))
+}
+
+/// Whether the first-run download has completed on this machine.
+///
+/// A marker rather than a probe build: on an empty cache a probe takes seconds
+/// to fail, and the answer is wanted before the first screen settles. If the
+/// cache is cleared behind our back the marker lies, and the frontend falls
+/// back on recognising the failed build (see `isColdCache` in App.tsx).
+#[tauri::command]
+fn cache_ready(app: tauri::AppHandle) -> Result<bool, CompileErr> {
+    Ok(app_data(&app)?.join(READY_MARKER).exists())
+}
+
+/// Prime the offline cache: the common package and font set, then each of
+/// `documents` (the built-in plates), so that everything the app offers works
+/// with the network off. Each document is its own job; `fetching` events report
+/// progress throughout.
+///
+/// An interrupted run can simply be retried: what already arrived stays cached.
 #[tauri::command]
 async fn warmup_cache(
     app: tauri::AppHandle,
     builds: tauri::State<'_, Builds>,
+    documents: Option<Vec<String>>,
 ) -> Result<u64, CompileErr> {
-    let dir = app
-        .path()
-        .app_local_data_dir()
-        .map_err(|e| err(format!("cannot locate app data: {e}")))?;
+    let started = std::time::Instant::now();
+    let dir = app_data(&app)?;
     let work = dir.join("warmup");
     std::fs::create_dir_all(&work).map_err(|e| err(format!("cannot stage warmup: {e}")))?;
-    // Queued like any other job: it shares the resource cache the builds read.
-    // Never dropped — priming *is* the cache write, so skipping it would leave
-    // the user with a stale banner and a cold cache.
-    typeset(
-        &builds,
-        work.join("warmup.tex"),
-        engine::WARMUP.to_string(),
-        false,
-        IfSuperseded::Run,
-    )
-    .await
-    .map(|ok| ok.duration_ms)
+
+    let jobs = std::iter::once(engine::WARMUP.to_string()).chain(documents.unwrap_or_default());
+    for (i, source) in jobs.enumerate() {
+        // Queued like any other job: it shares the resource cache the builds
+        // read. Never dropped — priming *is* the cache write, so skipping it
+        // would leave the user with a stale banner and a cold cache.
+        typeset(
+            &app,
+            &builds,
+            work.join(format!("warmup-{i}.tex")),
+            source,
+            false,
+            IfSuperseded::Run,
+        )
+        .await?;
+    }
+
+    std::fs::write(dir.join(READY_MARKER), "")
+        .map_err(|e| err(format!("cannot record setup: {e}")))?;
+    Ok(started.elapsed().as_millis() as u64)
 }
 
 const QUIT_ID: &str = "scribex-quit";
@@ -359,6 +399,7 @@ pub fn run() {
             save_document,
             export_pdf,
             warmup_cache,
+            cache_ready,
             set_offline
         ])
         .run(tauri::generate_context!())

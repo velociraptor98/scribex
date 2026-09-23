@@ -12,7 +12,7 @@ interface MarksProps {
 export function Marks({ diags, built, onGoto, onFix, onIgnore }: MarksProps) {
   return (
     <aside className="marks">
-      <div className="rubric">Marks on this proof</div>
+      <div className="rubric">Issues in this build</div>
 
       {diags.map((d, i) => (
         <article className="mark" key={`${d.title}-${d.line ?? i}`}>
@@ -50,12 +50,12 @@ export function Marks({ diags, built, onGoto, onFix, onIgnore }: MarksProps) {
 
       {diags.length === 0 && (
         <p className="marks-clean">
-          {built ? "Everything set cleanly." : "Nothing set yet."}
+          {built ? "No issues — the document built cleanly." : "Nothing built yet."}
         </p>
       )}
 
       {diags.length > 0 && (
-        <p className="marks-clean">Everything else set cleanly.</p>
+        <p className="marks-clean">Everything else built cleanly.</p>
       )}
     </aside>
   );

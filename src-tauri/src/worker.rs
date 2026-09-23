@@ -9,10 +9,38 @@
 //! to bundle, sign, or notarize — it is the same executable.
 
 use serde::{Deserialize, Serialize};
+use std::fmt::Arguments;
+use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::process::Stdio;
+use tectonic::status::{MessageKind, StatusBackend};
 
 pub const FLAG: &str = "--typeset";
+
+/// Prefix of the stderr line the worker writes as it starts downloading a
+/// resource. stdout carries the one JSON response and nothing else, so progress
+/// travels on stderr, where it can be read while the job is still running.
+const FETCH: &str = "scribex-fetch\t";
+
+/// Forwards Tectonic's "downloading <file>" notes to the parent. Everything
+/// else it says is in the log already.
+struct Progress;
+
+impl StatusBackend for Progress {
+    fn report(&mut self, kind: MessageKind, args: Arguments, _err: Option<&tectonic::Error>) {
+        if kind != MessageKind::Note {
+            return;
+        }
+        let note = args.to_string();
+        if let Some(name) = note.strip_prefix("downloading ") {
+            let mut err = std::io::stderr().lock();
+            let _ = writeln!(err, "{FETCH}{name}");
+            let _ = err.flush();
+        }
+    }
+
+    fn dump_error_logs(&mut self, _output: &[u8]) {}
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct Request {
@@ -49,6 +77,7 @@ pub fn main() -> ! {
             &req.source,
             &req.out_dir,
             req.only_cached,
+            &mut Progress,
         ) {
             Ok(ok) => Response::Ok { log: ok.log, duration_ms: ok.duration_ms },
             Err(e) => Response::Err {
@@ -71,8 +100,9 @@ pub fn main() -> ! {
 }
 
 /// Run one typesetting job in a fresh child process. Blocking; call from a
-/// blocking task.
-pub fn run(req: Request) -> Response {
+/// blocking task. `on_fetch` is called with each resource name as the engine
+/// starts downloading it.
+pub fn run(req: Request, mut on_fetch: impl FnMut(String) + Send + 'static) -> Response {
     let exe = match std::env::current_exe() {
         Ok(p) => p,
         Err(e) => return fail(format!("cannot locate worker: {e}")),
@@ -82,12 +112,24 @@ pub fn run(req: Request) -> Response {
         .arg(FLAG)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
     {
         Ok(c) => c,
         Err(e) => return fail(format!("cannot start worker: {e}")),
     };
+
+    // Drained on its own thread so progress arrives while the job runs, and so
+    // a chatty engine can never block on a full pipe.
+    let progress = child.stderr.take().map(|stderr| {
+        std::thread::spawn(move || {
+            for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+                if let Some(name) = line.strip_prefix(FETCH) {
+                    on_fetch(name.to_string());
+                }
+            }
+        })
+    });
 
     if let Some(mut stdin) = child.stdin.take() {
         if let Err(e) = serde_json::to_writer(&mut stdin, &req) {
@@ -100,6 +142,9 @@ pub fn run(req: Request) -> Response {
         Ok(o) => o,
         Err(e) => return fail(format!("worker wait failed: {e}")),
     };
+    if let Some(t) = progress {
+        let _ = t.join();
+    }
 
     if out.stdout.is_empty() {
         // No response at all: the engine aborted (see engine.rs) or was killed.
