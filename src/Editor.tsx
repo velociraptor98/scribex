@@ -2,7 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers, highlightActiveLine } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
+import { search, searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { HighlightStyle, bracketMatching, foldGutter, indentOnInput, syntaxHighlighting } from "@codemirror/language";
 import { closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
 import { tags as t } from "@lezer/highlight";
@@ -117,6 +117,10 @@ const Editor = forwardRef<EditorHandle, Props>(function Editor(
         closeBrackets(),
         highlightActiveLine(),
         highlightSelectionMatches(),
+        // Take find and replace text as typed. By default CodeMirror reads \n,
+        // \r, \t and \\ as escapes, which mangles LaTeX: replacing with
+        // \text{…} would insert a tab and "ext{…}".
+        search({ literal: true }),
         syntaxHighlighting(latexHighlight, { fallback: true }),
         latexLanguage,
         latexCompletion,
