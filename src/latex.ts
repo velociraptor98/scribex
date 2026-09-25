@@ -47,20 +47,63 @@ export interface OutlineEntry {
   level: number;
   title: string;
   line: number;
+  /** As LaTeX would print it ("2.1"); empty for starred, unnumbered headings. */
+  number: string;
 }
 
-const SECTION_RE = /^\s*\\(part|chapter|section|subsection|subsubsection)\*?\{(.+?)\}/;
+// The title is read by brace matching below, so an empty `{}` or a nested
+// `\emph{…}` inside it is taken whole.
+const SECTION_RE = /^\s*\\(part|chapter|section|subsection|subsubsection)(\*?)\s*(?:\[[^\]]*\])?\s*\{/;
 const LEVELS: Record<string, number> = {
   part: 0, chapter: 1, section: 2, subsection: 3, subsubsection: 4,
 };
+const ROMAN: [number, string][] = [[10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]];
+
+function roman(n: number): string {
+  let out = "";
+  for (const [v, r] of ROMAN) for (; n >= v; n -= v) out += r;
+  return out;
+}
+
+/** Everything up to the brace that closes the one before `from`, or the rest
+ *  of the line if the title runs on. */
+function braced(text: string, from: number): string {
+  let depth = 1;
+  for (let i = from; i < text.length; i++) {
+    if (text[i] === "\\") i++;
+    else if (text[i] === "{") depth++;
+    else if (text[i] === "}" && --depth === 0) return text.slice(from, i);
+  }
+  return text.slice(from);
+}
 
 export function outline(source: string): OutlineEntry[] {
-  const out: OutlineEntry[] = [];
+  const heads: { level: number; starred: boolean; title: string; line: number }[] = [];
   source.split("\n").forEach((text, i) => {
     const m = SECTION_RE.exec(text);
-    if (m) out.push({ level: LEVELS[m[1]], title: m[2], line: i + 1 });
+    if (m) {
+      heads.push({
+        level: LEVELS[m[1]],
+        starred: m[2] === "*",
+        title: braced(text, m[0].length).trim(),
+        line: i + 1,
+      });
+    }
   });
-  return out;
+
+  // Number like LaTeX: a heading resets the ones beneath it, starred headings
+  // take no number, and parts count on their own without resetting chapters.
+  // The dotted number starts at the shallowest level in use, so an article
+  // reads 1, 1.1 rather than 0.1.
+  const top = Math.max(1, Math.min(5, ...heads.filter((h) => h.level > 0).map((h) => h.level)));
+  const counters = [0, 0, 0, 0, 0];
+  return heads.map(({ level, starred, title, line }) => {
+    if (starred) return { level, title, line, number: "" };
+    counters[level]++;
+    if (level > 0) counters.fill(0, level + 1);
+    const number = level === 0 ? roman(counters[0]) : counters.slice(top, level + 1).join(".");
+    return { level, title, line, number };
+  });
 }
 
 /** The tally under the Contents panel. Counted from the source, not the log,

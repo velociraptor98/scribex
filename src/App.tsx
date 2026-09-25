@@ -7,7 +7,7 @@ import { appLocalDataDir } from "@tauri-apps/api/path";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import Editor, { EditorHandle } from "./Editor";
-import PdfView from "./PdfView";
+import PdfView, { MAX_ZOOM, MIN_ZOOM, stepZoom, type Zoom } from "./PdfView";
 import TitleBar from "./TitleBar";
 import Welcome from "./Welcome";
 import Palette, { AppCommand } from "./Palette";
@@ -61,7 +61,12 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [offline, setOffline] = useState(true);
   const [missing, setMissing] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(1.3);
+  const [zoom, setZoom] = useState<Zoom>("fit");
+  // The scale on screen, which "fit" resolves to; zooming steps from here.
+  const [scale, setScale] = useState(1);
+  const scaleRef = useRef(scale);
+  scaleRef.current = scale;
+  const zoomBy = useCallback((dir: 1 | -1) => setZoom(stepZoom(scaleRef.current, dir)), []);
   const [autoBuild, setAutoBuild] = useState(true);
   const [autoSave, setAutoSave] = useState(true);
   const [autosaving, setAutosaving] = useState<"idle" | "saving" | "saved">("idle");
@@ -477,8 +482,9 @@ export default function App() {
     { id: "live", title: autoBuild ? "Stop building as I type" : "Build as I type", words: ["live", "auto", "rebuild", "debounce", "set"], run: () => setAutoBuild((v) => !v) },
     { id: "autosave", title: autoSave ? "Stop autosaving" : "Autosave every 10 seconds", words: ["autosave", "auto", "save", "write"], run: () => setAutoSave((v) => !v) },
     { id: "offline", title: offline ? "Allow the network" : "Refuse the network", words: ["offline", "online", "cache"], run: toggleOffline },
-    { id: "zoomin", title: "Zoom in on the preview", hint: "⌘+", words: ["enlarge", "bigger", "proof"], run: () => setZoom((z) => Math.min(3, z + 0.15)) },
-    { id: "zoomout", title: "Zoom out of the preview", hint: "⌘−", words: ["reduce", "smaller", "proof"], run: () => setZoom((z) => Math.max(0.5, z - 0.15)) },
+    { id: "zoomin", title: "Zoom in on the preview", hint: "⌘+", words: ["enlarge", "bigger", "proof"], run: () => zoomBy(1) },
+    { id: "zoomout", title: "Zoom out of the preview", hint: "⌘−", words: ["reduce", "smaller", "proof"], run: () => zoomBy(-1) },
+    { id: "zoomfit", title: "Fit the preview to width", hint: "⌘0", words: ["zoom", "fit", "width", "reset", "proof"], run: () => setZoom("fit") },
     { id: "marks", title: "Show issues", words: ["errors", "warnings", "problems", "marks"], run: () => setRightPane("marks"), disabled: visible.length === 0 },
     { id: "presslog", title: pressOpen ? "Hide the press log" : "Show the press log", words: ["log", "tex", "passes"], run: () => setPressOpen((v) => !v) },
     { id: "welcome", title: "Back to the title page", words: ["welcome", "home", "recent"], run: () => setScreen("welcome") },
@@ -504,8 +510,9 @@ export default function App() {
       else if (k === "r") { e.preventDefault(); h.build(h.source); }
       else if (k === "b") { e.preventDefault(); insert(`\\textbf{${CARET}}`); }
       else if (k === "i") { e.preventDefault(); insert(`\\emph{${CARET}}`); }
-      else if (k === "=" || k === "+") { e.preventDefault(); setZoom((z) => Math.min(3, z + 0.15)); }
-      else if (k === "-") { e.preventDefault(); setZoom((z) => Math.max(0.5, z - 0.15)); }
+      else if (k === "=" || k === "+") { e.preventDefault(); zoomBy(1); }
+      else if (k === "-") { e.preventDefault(); zoomBy(-1); }
+      else if (k === "0") { e.preventDefault(); setZoom("fit"); }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -620,8 +627,8 @@ export default function App() {
                 onClick={() => editor.current?.goto(s.line)}
                 title={`line ${s.line}`}
               >
-                <span className="contents-num tnum">{i + 1}</span>
-                <span className="contents-title">{s.title}</span>
+                {s.number && <span className="contents-num tnum">{s.number}</span>}
+                <span className={`contents-title${s.title ? "" : " is-untitled"}`}>{s.title || "Untitled"}</span>
               </button>
             ))}
             {sections.length === 0 && <div className="contents-empty">No sections yet</div>}
@@ -685,7 +692,7 @@ export default function App() {
           </div>
 
           {rightPane === "proof" ? (
-            <PdfView data={pdf} zoom={zoom} onPages={setPages} onPage={setPage} />
+            <PdfView data={pdf} zoom={zoom} onScale={setScale} onPages={setPages} onPage={setPage} />
           ) : (
             <Marks
               diags={visible}
@@ -699,8 +706,15 @@ export default function App() {
           <div className="recto-foot tnum">
             <span>
               {pages > 0 ? `Page ${Math.min(page, pages)} of ${pages}` : "No preview yet"}
-              {" · "}{Math.round(zoom * 100)}%
             </span>
+            {rightPane === "proof" && (
+              <span className="zoom">
+                <button className="zoom-btn" onClick={() => zoomBy(-1)} disabled={scale <= MIN_ZOOM} title="Zoom out (⌘−)" aria-label="Zoom out">−</button>
+                <button className="zoom-level" onClick={() => setZoom(1)} title="Actual size">{Math.round(scale * 100)}%</button>
+                <button className="zoom-btn" onClick={() => zoomBy(1)} disabled={scale >= MAX_ZOOM} title="Zoom in (⌘+)" aria-label="Zoom in">+</button>
+                <button className={`zoom-fit${zoom === "fit" ? " is-on" : ""}`} onClick={() => setZoom("fit")} title="Fit to width (⌘0)">Fit</button>
+              </span>
+            )}
             <span className={busy ? "is-working" : undefined}>{status}</span>
           </div>
         </section>
