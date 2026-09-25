@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "ScribeX",
-  "version": "0.2.0",
+  "version": "0.3.0-alpha",
   "identifier": "com.kunalsingh.scribex",
   "build": {
     "beforeDevCommand": "npm run dev",
