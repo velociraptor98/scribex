@@ -2,8 +2,8 @@
 # Build a Release ScribeX.app and package it as build/dist/ScribeX-<version>.dmg.
 #
 #   SIGNING_IDENTITY  "Developer ID Application: Name (TEAMID)". Without it the
-#                     app is signed ad hoc: it runs on this Mac, and Gatekeeper
-#                     refuses it everywhere else.
+#                     app is signed ad hoc, and other Macs block it until the
+#                     user allows it once (see README).
 #   NOTARY_PROFILE    A notarytool keychain profile (see README). With both set,
 #                     the app and the DMG are notarized and stapled, so they open
 #                     on any Mac, offline too.
@@ -21,7 +21,7 @@ if [ -n "$identity" ]; then
     [ -n "$team" ] || { echo "error: SIGNING_IDENTITY should end in (TEAMID)" >&2; exit 1; }
     set -- CODE_SIGN_IDENTITY="$identity" DEVELOPMENT_TEAM="$team" OTHER_CODE_SIGN_FLAGS=--timestamp
 else
-    echo "warning: no SIGNING_IDENTITY; signing ad hoc, for this Mac only" >&2
+    echo "note: no SIGNING_IDENTITY; signing ad hoc, so other Macs must allow the app once" >&2
     set --
 fi
 if [ -n "$profile" ] && [ -z "$identity" ]; then

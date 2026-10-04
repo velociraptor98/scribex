@@ -78,10 +78,24 @@ arm64 to match.
 ## Distributing
 
 `macos/scripts/make-dmg.sh` builds a Release app and packages it as
-`macos/build/dist/ScribeX-<version>.dmg`. Run without settings, it signs ad
-hoc: the DMG works on this Mac and Gatekeeper refuses it on others.
+`macos/build/dist/ScribeX-<version>.dmg`.
 
-A DMG other Macs will open needs a paid Apple Developer account, set up once:
+### Without an Apple Developer account
+
+Run it with no settings. The app is signed ad hoc, which is enough to share:
+the first time someone opens it, macOS blocks it ("Apple could not verify
+'ScribeX' is free of malware"). They allow it once under System Settings →
+Privacy & Security → Open Anyway, and it opens normally from then on. On
+macOS 15 and later right-click → Open no longer offers this. Alternatively:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/ScribeX.app
+```
+
+### With an Apple Developer account
+
+Signing with a Developer ID and notarizing removes that step. It needs a paid
+Apple Developer account, set up once:
 
 1. Create a **Developer ID Application** certificate: Xcode → Settings →
    Accounts → Manage Certificates → + → Developer ID Application.
