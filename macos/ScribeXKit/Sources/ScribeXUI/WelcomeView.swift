@@ -1,7 +1,6 @@
 import ScribeXCore
 import SwiftUI
 
-/// The title page: new, open, the plates, and the recently set documents.
 struct WelcomeView: View {
     @Environment(AppModel.self) private var model
 
@@ -21,7 +20,6 @@ struct WelcomeView: View {
         }
     }
 
-    /// Why things are greyed out, while they are.
     private var why: String? {
         model.locked ? "Available once the one-time download has finished" : nil
     }
@@ -113,7 +111,6 @@ struct WelcomeView: View {
     }
 }
 
-/// The mark and the wordmark, sized together from one font size.
 private struct Lockup: View {
     var size: CGFloat
 
@@ -129,7 +126,7 @@ private struct Lockup: View {
     }
 }
 
-/// The ScribeX mark: two crossing strokes, drawn on a 100×100 grid.
+/// Drawn on a 100×100 grid.
 nonisolated private struct Mark: Shape {
     func path(in rect: CGRect) -> Path {
         let s = min(rect.width, rect.height) / 100
@@ -185,8 +182,7 @@ private struct RecentRow: View {
         .onHover { hovering = $0 }
     }
 
-    /// The last two path segments — enough to tell two ch3.tex files apart —
-    /// and what the document holds.
+    /// The last two path segments: enough to tell two ch3.tex files apart.
     private var details: String {
         var out = doc.path.split(separator: "/").suffix(2).joined(separator: "/")
         if doc.sections > 0 { out += " · \(doc.sections) section\(doc.sections > 1 ? "s" : "")" }

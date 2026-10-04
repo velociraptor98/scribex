@@ -2,7 +2,6 @@ import PDFKit
 import ScribeXCore
 import SwiftUI
 
-/// Export options over thumbnails of the last build.
 struct ExportSheet: View {
     @Environment(AppModel.self) private var model
     let pdf: Data
@@ -12,7 +11,6 @@ struct ExportSheet: View {
     @State private var thumbs: [NSImage] = []
     @State private var pages = 0
 
-    /// Paper size the document currently declares.
     private let documentSheet: Sheet
 
     init(pdf: Data, documentSheet: Sheet) {
@@ -115,8 +113,7 @@ struct ExportSheet: View {
             : String(format: "%.1f MB", Double(pdf.count) / 1024 / 1024)
     }
 
-    /// The first two pages, at a fixed height so Letter and A5 stack to the
-    /// same measure. A courtesy: the export does not depend on them.
+    /// A fixed height, so Letter and A5 stack to the same measure.
     private func renderThumbnails() {
         guard let document = PDFDocument(data: pdf) else { return }
         pages = document.pageCount

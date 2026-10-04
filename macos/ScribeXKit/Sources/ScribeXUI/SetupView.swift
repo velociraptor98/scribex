@@ -1,11 +1,7 @@
 import SwiftUI
 
-/// The first-run download of the LaTeX packages and fonts, without which
-/// nothing builds (see docs/OFFLINE.md). A card on the welcome screen, or a
-/// banner above the editor.
 struct SetupView: View {
     @Environment(AppModel.self) private var model
-    /// One line above the editor, rather than the title-page card.
     var compact: Bool
 
     /// Measured against an empty cache: the warmup set plus the four plates.
@@ -122,7 +118,6 @@ struct SetupView: View {
     }
 }
 
-/// The strip above the editor for setup and missing packages.
 struct Banner<Content: View>: View {
     @ViewBuilder var content: Content
 

@@ -6,8 +6,7 @@ struct ScribeXApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     var body: some Scene {
-        // The window is AppKit's, so closing it can wait on unsaved work (see
-        // AppShell.swift in ScribeXUI). SwiftUI contributes the menu bar.
+        // The window is AppKit's (see AppDelegate); SwiftUI adds only the menus.
         Settings { EmptyView() }
             .commands { AppCommands(model: delegate.model) }
     }

@@ -4,7 +4,6 @@ import PDFKit
 import ScribeXCore
 import UniformTypeIdentifiers
 
-/// App state, builds, file handling. What App.tsx did, minus the rendering.
 @Observable
 public final class AppModel {
     public enum Screen { case welcome, editor }
@@ -12,22 +11,19 @@ public final class AppModel {
     public enum CacheState { case unknown, cold, downloading, failed, ready }
     public enum Autosaving { case idle, saving, saved }
 
-    /// A fixed scale, or whatever makes the widest page fill the pane.
     public enum Zoom: Equatable {
         case fit
         case scale(Double)
     }
 
     public struct SetupProgress {
-        /// Resources downloaded so far in this run.
         var files = 0
-        /// The one arriving now.
         var current: String?
         var error: String?
     }
 
-    /// A built PDF on screen. `id` changes with every build, so the preview
-    /// knows to swap documents even when the bytes happen to match.
+    /// `id` changes with every build, so the preview swaps documents even when
+    /// the bytes happen to match.
     public struct Preview {
         let id: Int
         let data: Data
@@ -35,10 +31,9 @@ public final class AppModel {
     }
 
     static let debounce = Duration.milliseconds(600)
-    /// How often unsaved edits are written back to the document's file.
     static let autosaveEvery = Duration.seconds(10)
-    /// How long the autosave indicator lingers. A save takes a few milliseconds,
-    /// far too quick to see without holding it on screen.
+    /// A save takes a few milliseconds, far too quick to see without holding the
+    /// indicator on screen.
     static let savingShown = Duration.milliseconds(700)
     static let savedShown = Duration.seconds(2)
 
@@ -46,11 +41,9 @@ public final class AppModel {
     static let maxZoom = 4.0
     static let zoomSteps = [0.25, 0.33, 0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4]
 
-    // MARK: state
-
     var screen = Screen.welcome
-    /// The editor's text. The editor owns it while the user types and reports
-    /// each change through `edit(_:)`.
+    /// The editor owns the text while the user types and reports each change
+    /// through `edit(_:)`.
     private(set) var source = articleSource
     private(set) var path: URL?
     private(set) var preview: Preview?
@@ -60,15 +53,15 @@ public final class AppModel {
     private(set) var busy = false
     private(set) var offline = true
     private(set) var missing: String?
+    private(set) var absent: String?
     var zoom = Zoom.fit
-    /// The scale on screen, which "fit" resolves to; zooming steps from here.
+    /// What "fit" resolves to on screen; zooming steps from here.
     var scale = 1.0
     var autoBuild = true { didSet { if autoBuild { scheduleBuild() } } }
     var autoSave = true { didSet { scheduleAutosave() } }
     private(set) var autosaving = Autosaving.idle
     private(set) var cache = CacheState.unknown
     private(set) var setup = SetupProgress()
-    /// Resources the engine has downloaded during the build in progress.
     private(set) var fetched: [String] = []
     private(set) var dirty = false
     private(set) var buildMs: Int?
@@ -79,9 +72,7 @@ public final class AppModel {
     var pressOpen = false
     var paletteOpen = false
     var exportOpen = false
-    /// The editor's selected text, so the palette can offer selection-aware actions.
     var selection = ""
-    /// Issues the reader has ignored; cleared on every new build.
     private(set) var ignored: Set<String> = []
     private var bib: (keys: [String], name: String?) = ([], nil)
 
@@ -89,14 +80,12 @@ public final class AppModel {
     private(set) var sections: [OutlineEntry] = []
     private(set) var tally = DocStats(sections: 0, equations: 0, citations: 0)
 
-    // MARK: plumbing
-
     public let editor = EditorHandle()
     @ObservationIgnored weak var window: NSWindow?
     @ObservationIgnored private let typesetter: Typesetter
     @ObservationIgnored private let recentStore = RecentStore()
     @ObservationIgnored private let dataDirectory: URL
-    /// Builds into here until the user opens or saves a real document.
+    /// Untitled documents build here.
     @ObservationIgnored private let scratch: URL
     @ObservationIgnored private var seq = 0
     @ObservationIgnored private var previewCount = 0
@@ -106,12 +95,9 @@ public final class AppModel {
     @ObservationIgnored private var autosaveLoop: Task<Void, Never>?
     @ObservationIgnored private var autosaveShown: Task<Void, Never>?
 
-    /// `worker` is the `scribex-typeset` executable.
     public init(worker: URL) {
         typesetter = Typesetter(worker: worker)
         recent = recentStore.load()
-        // Where the Tauri app kept its scratch file and setup marker, so a
-        // machine that ran it does not download the essentials twice.
         dataDirectory = URL.applicationSupportDirectory.appending(path: "com.kunalsingh.scribex", directoryHint: .isDirectory)
         scratch = dataDirectory.appending(path: "scratch.tex")
         cache = Typesetter.cacheReady(in: dataDirectory) ? .ready : .cold
@@ -120,20 +106,16 @@ public final class AppModel {
 
     var name: String { path?.lastPathComponent ?? "untitled.tex" }
     var visible: [Diagnostic] { diags.filter { !ignored.contains($0.key) } }
-    /// No document opens until the first-run download has finished.
     var locked: Bool { cache != .ready }
 
-    // MARK: building
-
-    /// Typeset `source` now. `allowNetwork` overrides the offline switch for
-    /// this one build, for "fetch it".
+    /// `allowNetwork` overrides the offline switch for this one build, for
+    /// "fetch it".
     func build(allowNetwork: Bool = false) {
         pendingBuild?.cancel()
         let src = source
         Task { await runBuild(src, allowNetwork: allowNetwork) }
     }
 
-    /// Debounced live rebuild, once a document is on screen.
     private func scheduleBuild() {
         pendingBuild?.cancel()
         guard screen == .editor, autoBuild else { return }
@@ -170,7 +152,7 @@ public final class AppModel {
                 ifSuperseded: allowNetwork ? .run : .drop,
                 onFetch: fetchHandler
             )
-            guard mine == seq else { return }  // a newer build superseded this one
+            guard mine == seq else { return }
             let (parsed, rows) = await Self.read(r.log, context: context, name: name)
             guard mine == seq else { return }
             guard let document = PDFDocument(data: r.pdf) else {
@@ -183,12 +165,11 @@ public final class AppModel {
             press = rows
             ignored = []
             missing = nil
+            absent = nil
             buildMs = r.durationMs
             status = "Built in \(r.durationMs) ms"
         } catch {
-            // The typesetter runs one job at a time and drops those a newer
-            // request has overtaken. Leave the status alone — the newer build
-            // owns it now.
+            // Leave the status alone: the newer build owns it now.
             if error.superseded || mine != seq { return }
             if error.isColdCache {
                 // Not the document's fault: point at the setup instead of listing
@@ -197,24 +178,30 @@ public final class AppModel {
                 diags = []
                 press = []
                 missing = nil
+                absent = nil
                 buildMs = error.durationMs
                 status = "Waiting for the one-time download"
                 return
             }
+            var context = context
+            context.absentFiles = Set([error.absentFile].compactMap { $0 })
             let (parsed, rows) = await Self.read(error.log, context: context, name: name)
             guard mine == seq else { return }
             diags = parsed
             press = rows
             ignored = []
             missing = error.missingFile
+            absent = error.absentFile
             buildMs = error.durationMs
-            status = error.missingFile.map { "Missing: \($0)" } ?? "Build failed"
+            status = error.missingFile.map { "Missing: \($0)" }
+                ?? error.absentFile.map { "Not found: \($0)" }
+                ?? "Build failed"
             // Stay on the last good preview. Switching to Issues here would do
             // it on every half-typed command while building as you type.
         }
     }
 
-    /// Parse a log off the main thread; a long one runs to thousands of lines.
+    /// Off the main thread: a long log runs to thousands of lines.
     private nonisolated static func read(
         _ log: String, context: LogContext, name: String
     ) async -> ([Diagnostic], [PressRow]) {
@@ -222,7 +209,6 @@ public final class AppModel {
         return (parsed, pressLog(log, source: context.source, name: name, diags: parsed))
     }
 
-    /// Each package or font the engine downloads, from any build or setup run.
     private var fetchHandler: @Sendable (String) -> Void {
         { [weak self] name in
             Task { @MainActor in self?.noteFetch(name) }
@@ -239,9 +225,8 @@ public final class AppModel {
         }
     }
 
-    /// The first-run download of everything the warmup set and plates use. See
-    /// docs/OFFLINE.md. Not `busy`: builds queue behind it and then succeed from
-    /// the fresh cache.
+    /// Not `busy`: builds queue behind the download and then succeed from the
+    /// fresh cache.
     func setUp() {
         guard !settingUp else { return }
         settingUp = true
@@ -278,9 +263,11 @@ public final class AppModel {
         offline.toggle()
     }
 
-    // MARK: documents
+    func revealFolder() {
+        guard let path else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([path])
+    }
 
-    /// Show `text` in the editor, as the document at `url` (nil for untitled).
     func adopt(_ text: String, url: URL?, note: String) {
         guard !locked else { return }
         // Write back edits the autosave timer has not reached yet; the buffer is
@@ -293,6 +280,7 @@ public final class AppModel {
         press = []
         ignored = []
         missing = nil
+        absent = nil
         dirty = false
         preview = nil
         pages = 0
@@ -318,7 +306,7 @@ public final class AppModel {
     func openFile() {
         guard !locked else { return }
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [Self.texType]
+        panel.delegate = TexFiles.filter
         Task {
             guard await run(panel) == .OK, let url = panel.url else { return }
             open(url)
@@ -343,7 +331,6 @@ public final class AppModel {
         }
     }
 
-    /// A keystroke, paste or fix in the editor.
     func edit(_ text: String) {
         source = text
         dirty = true
@@ -351,7 +338,6 @@ public final class AppModel {
         scheduleBuild()
     }
 
-    /// Write the buffer to disk, prompting for a location if there isn't one yet.
     func save(as forceDialog: Bool = false) {
         Task { await saveFile(forceDialog: forceDialog) }
     }
@@ -396,7 +382,6 @@ public final class AppModel {
         ))
     }
 
-    /// Bibliography keys, so an undefined citation can propose the right one.
     private func loadBibliography() {
         guard let dir = path?.deletingLastPathComponent() else {
             bib = ([], nil)
@@ -427,8 +412,6 @@ public final class AppModel {
         tally = stats(source)
     }
 
-    // MARK: autosave
-
     /// Autosave on a fixed beat rather than after a pause, so a long stretch of
     /// continuous typing is still written back. Ticks with nothing new are no-ops.
     private func scheduleAutosave() {
@@ -442,9 +425,8 @@ public final class AppModel {
         }
     }
 
-    /// Autosave now whatever is waiting on the timer. Only a document that
-    /// already has a file autosaves; an untitled one needs ⌘S to choose where
-    /// it goes.
+    /// Only a document that already has a file autosaves; an untitled one needs
+    /// ⌘S to choose where it goes.
     func flushAutosave() {
         guard autoSave, dirty, let path else { return }
         autosaveShown?.cancel()
@@ -466,8 +448,6 @@ public final class AppModel {
         }
     }
 
-    // MARK: export
-
     func requestExport() {
         guard screen == .editor else { return }
         if preview != nil {
@@ -477,8 +457,6 @@ public final class AppModel {
         }
     }
 
-    /// Export honouring the export sheet. Options that change the document are
-    /// applied to a throwaway build; the buffer and the file are left alone.
     func export(_ options: ExportOptions) {
         let target = path ?? scratch
         let panel = NSSavePanel()
@@ -529,8 +507,6 @@ public final class AppModel {
         }
     }
 
-    // MARK: editing
-
     func applyFix(_ fix: Fix) {
         editor.replaceOnLine(fix.line, find: fix.find, replace: fix.replace)
         status = fix.label
@@ -555,10 +531,7 @@ public final class AppModel {
         editor.insert(text)
     }
 
-    // MARK: zoom
-
-    /// The next stop up or down from the scale on screen, which may be an odd
-    /// fit-width value.
+    /// The scale on screen may be an odd fit-width value between stops.
     func zoom(by direction: Int) {
         let next = direction > 0
             ? Self.zoomSteps.first { $0 > scale + 0.005 }
@@ -566,11 +539,8 @@ public final class AppModel {
         zoom = .scale(next ?? (direction > 0 ? Self.maxZoom : Self.minZoom))
     }
 
-    // MARK: closing
-
-    /// Confirm before discarding unsaved work. Autosaving documents are written
-    /// back first, so the question only comes up if that fails or the document
-    /// has no file yet. Calls `proceed` with whether to go ahead.
+    /// Autosaving documents are written back first, so the question only comes
+    /// up if that fails or the document has no file yet.
     func confirmDiscard(_ proceed: @escaping (Bool) -> Void) {
         flushAutosave()
         guard dirty, let window else { return proceed(true) }
@@ -583,13 +553,24 @@ public final class AppModel {
         alert.beginSheetModal(for: window) { proceed($0 == .alertFirstButtonReturn) }
     }
 
-    // MARK: helpers
+    /// The type a saved document gets, so the save panel adds ".tex". Whatever
+    /// the system calls a .tex file: often nothing is registered for the
+    /// extension, and it is a dynamic type that conforms to nothing useful.
+    static let texType = UTType(filenameExtension: "tex") ?? .plainText
 
-    static let texType = UTType(filenameExtension: "tex", conformingTo: .plainText) ?? .plainText
-
-    /// Show a panel as a sheet on the window, or on its own without one.
     private func run(_ panel: NSSavePanel) async -> NSApplication.ModalResponse {
         if let window { return await panel.beginSheetModal(for: window) }
         return panel.runModal()
+    }
+}
+
+/// Lets the open panel offer .tex files by extension. Matching by type would
+/// depend on which app, if any, has declared one for .tex on this Mac: with
+/// none, each file gets a dynamic type that no filter can name in advance.
+private final class TexFiles: NSObject, NSOpenSavePanelDelegate {
+    static let filter = TexFiles()
+
+    func panel(_ sender: Any, shouldEnable url: URL) -> Bool {
+        url.hasDirectoryPath || url.pathExtension.lowercased() == "tex"
     }
 }

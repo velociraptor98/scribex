@@ -1,6 +1,5 @@
 import Foundation
 
-/// Commands offered by completion after a backslash.
 public let latexCommands = [
     "documentclass", "usepackage", "begin", "end", "section", "subsection",
     "subsubsection", "paragraph", "textbf", "textit", "texttt", "emph",
@@ -10,16 +9,12 @@ public let latexCommands = [
     "infty", "partial", "nabla", "cdot", "times", "leq", "geq", "neq", "approx",
 ]
 
-/// Environments offered by completion inside `\begin{` and `\end{`.
 public let latexEnvironments = [
     "document", "equation", "equation*", "align", "align*", "gather",
     "itemize", "enumerate", "description", "figure", "table", "tabular",
     "center", "quote", "verbatim", "abstract", "theorem", "proof", "matrix",
 ]
 
-// MARK: - outline
-
-/// Section/subsection outline for the sidebar, derived by scanning the source.
 public struct OutlineEntry: Hashable, Sendable {
     public var level: Int
     public var title: String
@@ -44,8 +39,8 @@ private func roman(_ n: Int) -> String {
     return out
 }
 
-/// Everything up to the brace that closes the one before `from`, or the rest
-/// of the line if the title runs on.
+/// Up to the brace that closes the heading's, or the rest of the line if the
+/// title runs on.
 private func braced(_ text: Substring) -> Substring {
     var depth = 1
     var i = text.startIndex
@@ -98,8 +93,6 @@ public func outline(_ source: String) -> [OutlineEntry] {
     }
 }
 
-// MARK: - counts
-
 /// The tally under the Contents panel. Counted from the source, not the log,
 /// so it stays honest while a build is failing.
 public struct DocStats: Hashable, Sendable {
@@ -118,7 +111,6 @@ public struct DocStats: Hashable, Sendable {
 nonisolated(unsafe) private let equationEnvs = #/\\begin\{(equation|align|gather|multline|eqnarray|displaymath)\*?\}/#
 nonisolated(unsafe) private let citeKeys = #/\\(?:cite|citep|citet|citeauthor|citeyear|parencite|textcite)\s*(?:\[[^\]]*\])*\{([^}]*)\}/#
 
-/// Distinct keys cited in the source.
 public func citedKeys(_ source: String) -> Set<String> {
     var keys = Set<String>()
     for m in source.matches(of: citeKeys) {
@@ -140,13 +132,10 @@ public func stats(_ source: String) -> DocStats {
     )
 }
 
-/// Bibliography keys defined in a .bib file, for resolving citation typos.
 public func bibKeys(_ bib: String) -> [String] {
     bib.matches(of: #/@\w+\s*\{\s*([^,\s}]+)/#).map { String($0.1) }
 }
 
-/// The .bib files a document names in `\bibliography` or `\addbibresource`,
-/// with the extension added where the document leaves it off.
 public func bibliographyFiles(_ source: String) -> [String] {
     source.matches(of: #/\\(?:bibliography|addbibresource)\s*\{([^}]+)\}/#)
         .flatMap { $0.1.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } }

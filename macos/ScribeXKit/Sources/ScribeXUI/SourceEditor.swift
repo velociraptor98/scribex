@@ -1,23 +1,15 @@
-/*
- * The source pane: an STTextView set up the way the CodeMirror editor was —
- * LaTeX colouring, line numbers, a highlighted current line, matching
- * brackets, auto-closed brackets, completion of commands and environments,
- * and a 28px line rhythm so the source lines up with the page beside it.
- */
-
 import AppKit
 import ScribeXCore
 import STTextView
 import SwiftUI
 
-/// What the palette, the issue fixes and the contents list ask of the editor.
 public final class EditorHandle {
     fileprivate weak var view: LatexTextView?
-    /// Text loaded before the view exists, applied when it appears.
+    /// Text loaded before the view exists.
     fileprivate var pending: String?
 
-    /// Replace the whole document. Clears undo history too, so you cannot undo
-    /// your way out of a newly opened file and back into the previous one.
+    /// Clears undo history too, so you cannot undo your way out of a newly
+    /// opened file and back into the previous one.
     func load(_ text: String) {
         guard let view else {
             pending = text
@@ -26,8 +18,8 @@ public final class EditorHandle {
         view.load(text)
     }
 
-    /// Insert at the caret, replacing any selection. A `caret` marker in `text`
-    /// sets where the caret lands; otherwise it lands after the insertion.
+    /// A `caret` marker in `text` sets where the caret lands; otherwise it lands
+    /// after the insertion.
     func insert(_ text: String) {
         guard let view else { return }
         let marker = (text as NSString).range(of: caret)
@@ -40,7 +32,7 @@ public final class EditorHandle {
         focus()
     }
 
-    /// Replace the first occurrence of `find` on a 1-based line.
+    /// `line` is 1-based.
     func replaceOnLine(_ line: Int, find: String, replace: String) {
         guard let view, let range = view.range(ofLine: line) else { return }
         let text = (view.text ?? "") as NSString
@@ -140,12 +132,10 @@ struct SourceEditor: NSViewRepresentable {
     }
 }
 
-// MARK: - the text view
-
 final class LatexTextView: STTextView {
-    /// Set while a whole document is being swapped in, which is not an edit.
+    /// A document being swapped in, which is not an edit.
     private(set) var isLoading = false
-    /// Set while the view makes its own edit in response to typing.
+    /// The view's own edit in response to typing, which must not be intercepted.
     private var autoEditing = false
     private var matched: [NSRange] = []
 
@@ -206,9 +196,7 @@ final class LatexTextView: STTextView {
         isLoading = false
     }
 
-    // MARK: lines
-
-    /// The characters of a 1-based line, without its line break.
+    /// `line` is 1-based; the range excludes the line break.
     func range(ofLine line: Int) -> NSRange? {
         guard line >= 1 else { return nil }
         let text = (self.text ?? "") as NSString
@@ -221,8 +209,6 @@ final class LatexTextView: STTextView {
         let end = text.range(of: "\n", range: NSRange(location: start, length: text.length - start))
         return NSRange(location: start, length: (end.location == NSNotFound ? text.length : end.location) - start)
     }
-
-    // MARK: colouring
 
     private func highlightAll() {
         let length = ((text ?? "") as NSString).length
@@ -259,12 +245,10 @@ final class LatexTextView: STTextView {
         }
     }
 
-    // MARK: brackets
-
     private static let pairs: [String: String] = ["{": "}", "[": "]", "(": ")"]
 
-    /// Close brackets as they open, and step over a closing bracket that is
-    /// already there. Returns whether the typed text should go in as it is.
+    /// Returns false when it has made the edit itself: closing a bracket as it
+    /// opens, or stepping over a closing bracket already there.
     func shouldType(_ string: String, in range: NSRange) -> Bool {
         guard !autoEditing, !isLoading else { return true }
         let text = (self.text ?? "") as NSString
@@ -286,7 +270,6 @@ final class LatexTextView: STTextView {
         return true
     }
 
-    /// Tint the bracket beside the caret and the one it pairs with.
     func matchBrackets() {
         for range in matched { removeRenderingAttribute(.backgroundColor, range: range) }
         matched = []
@@ -333,9 +316,7 @@ final class LatexTextView: STTextView {
         return nil
     }
 
-    // MARK: indentation
-
-    /// Indent the selected lines, like CodeMirror's indentWithTab.
+    /// Tab indents the selected lines rather than inserting a tab.
     override func insertTab(_ sender: Any?) {
         shiftLines(by: 1)
     }
@@ -374,7 +355,7 @@ final class LatexTextView: STTextView {
         )
     }
 
-    /// Keep the indentation of the line above.
+    /// Carries the current line's indentation onto the new one.
     override func insertNewline(_ sender: Any?) {
         let text = (self.text ?? "") as NSString
         let line = text.substring(with: text.lineRange(for: NSRange(location: textSelection.location, length: 0)))
@@ -384,10 +365,6 @@ final class LatexTextView: STTextView {
         breakUndoCoalescing()
     }
 
-    // MARK: completion
-
-    /// What is being typed before the caret, if it can be completed: a command
-    /// after a backslash, or an environment inside \begin{ or \end{.
     private func typing() -> (from: Int, prefix: String, options: [String])? {
         let selection = textSelection
         guard selection.length == 0 else { return nil }
@@ -413,8 +390,6 @@ final class LatexTextView: STTextView {
             .map { LatexCompletion(label: $0, from: typing.from) }
     }
 
-    /// Offer completion while a command or environment name is being typed,
-    /// as CodeMirror did, and put it away once it no longer applies.
     func completeIfTyping() {
         if typing() != nil {
             complete(nil)
@@ -431,7 +406,6 @@ final class LatexTextView: STTextView {
     }
 }
 
-/// One row of the completion list.
 struct LatexCompletion: STCompletionItem {
     let label: String
     /// Where the text being completed starts.

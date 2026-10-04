@@ -1,9 +1,5 @@
-/*
- * Snippet matching for the ⌘K palette: plain English in, LaTeX out.
- *
- * Matching is a local keyword score, so the vocabulary below does the work —
- * synonyms matter more here than clever ranking.
- */
+// Matching is a local keyword score, so the vocabulary below does the work:
+// synonyms matter more here than clever ranking.
 
 import Foundation
 
@@ -13,9 +9,7 @@ public let caret = "\u{2038}"
 public struct Suggestion: Hashable, Sendable, Identifiable {
     public var id: String
     public var title: String
-    /// The LaTeX this will insert, elided for display.
     public var preview: String?
-    /// A keyboard equivalent, when the action has one.
     public var hint: String?
     /// Empty for "turn the selection into a table", which the caller builds
     /// from the selection itself.
@@ -44,14 +38,11 @@ private struct Built: Sendable {
 
 private struct Intent: Sendable {
     var id: String
-    /// Words that should pull this intent up. Stemmed loosely by prefix match.
+    /// Matched loosely, by prefix in either direction.
     var words: [String]
-    /// Tie-break weight. Two intents often match a query equally well — "a table"
-    /// hits both `table` and `booktabs` — and the plainer reading should win
-    /// unless the query names the specialised one. Small enough that it never
-    /// overturns a genuinely better keyword match.
+    /// Breaks ties toward the plainer reading: "a table" matches both `table`
+    /// and `booktabs` equally. Too small to overturn a better keyword match.
     var bias: Double = 0
-    /// Built from the query so counts and names can flow into the title.
     var build: @Sendable (Query) -> Built
 }
 
@@ -170,7 +161,6 @@ private let intents: [Intent] = [
     },
 ]
 
-/// Selection-aware variants, offered only when there is something selected.
 private let wrappers: [Intent] = [
     Intent(id: "wrap-table", words: ["table", "turn", "convert", "selection", "into", "make"]) { _ in
         Built(title: "Turn the selection into a table", preview: "rows of tab- or comma-separated text → tabular", text: "")
@@ -210,7 +200,6 @@ private func score(_ intent: Intent, _ words: [String]) -> Double {
     return hits == 0 ? 0 : Double(hits) / Double(words.count)
 }
 
-/// Rank snippet intents against a plain-English query.
 public func suggest(_ text: String, hasSelection: Bool = false, limit: Int = 6) -> [Suggestion] {
     let words = tokenize(text)
     let q = Query(
@@ -237,7 +226,6 @@ public func suggest(_ text: String, hasSelection: Bool = false, limit: Int = 6) 
     return Array(out.prefix(limit))
 }
 
-/// Convert tab- or comma-separated lines into a tabular environment.
 public func selectionToTable(_ selection: String) -> String? {
     let lines = selection.trimmingCharacters(in: .whitespacesAndNewlines)
         .components(separatedBy: "\n")

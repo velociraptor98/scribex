@@ -1,8 +1,5 @@
 import Foundation
 
-/// What the editor colours, in the spirit of CodeMirror's `stex` mode that the
-/// React app used: commands, environment names, maths delimiters, brackets and
-/// comments. Everything else is prose.
 public enum LatexToken: Sendable {
     case command
     case environment
@@ -11,8 +8,6 @@ public enum LatexToken: Sendable {
     case comment
 }
 
-/// Scan `range` of `text` and report each token found, in order.
-///
 /// Works in UTF-16 offsets, which is what the text view speaks. Every token
 /// ends at a line break, so any range that starts at the beginning of a line
 /// can be scanned on its own — the editor re-scans only the lines an edit
@@ -44,7 +39,6 @@ public func latexTokens(in text: NSString, range: NSRange, _ found: (NSRange, La
                 found(NSRange(location: i, length: j - i), .command)
                 let name = text.substring(with: NSRange(location: i + 1, length: j - i - 1))
                 i = j
-                // \begin{name} and \end{name}: the name is the environment.
                 if name == "begin" || name == "end" {
                     var k = i
                     while k < end, at(k) == space || at(k) == tab { k += 1 }

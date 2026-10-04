@@ -1,13 +1,10 @@
 import Foundation
 
-/// An entry in the recent-documents list on the welcome screen.
 public struct RecentDoc: Codable, Hashable, Sendable, Identifiable {
     public var path: String
-    /// \title{…} when the document declares one, else the file name.
     public var title: String
     public var sections: Int
     public var citations: Int
-    /// The last open or save.
     public var opened: Date
 
     public var id: String { path }
@@ -21,7 +18,6 @@ public struct RecentDoc: Codable, Hashable, Sendable, Identifiable {
     }
 }
 
-/// The recent-documents list, kept in user defaults.
 public struct RecentStore: Sendable {
     public static let key = "scribex.recent"
     public static let limit = 8
@@ -44,7 +40,6 @@ public struct RecentStore: Sendable {
         return Array(docs.sorted { $0.opened > $1.opened }.prefix(Self.limit))
     }
 
-    /// Put `doc` at the top of the list, and return the new list.
     @discardableResult
     public func remember(_ doc: RecentDoc) -> [RecentDoc] {
         var stamped = doc
@@ -58,7 +53,6 @@ public struct RecentStore: Sendable {
     }
 }
 
-/// \title{…} when the document declares one, else the file name.
 public func documentTitle(_ source: String, path: String?) -> String {
     if let m = source.firstMatch(of: #/\\title\s*\{([^}]+)\}/#) {
         let title = m.1.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -67,7 +61,6 @@ public func documentTitle(_ source: String, path: String?) -> String {
     return path.map { ($0 as NSString).lastPathComponent } ?? "untitled.tex"
 }
 
-/// "2 min ago" · "Yesterday" · "3 Aug".
 public func when(_ date: Date, now: Date = .now) -> String {
     let mins = Int(now.timeIntervalSince(date) / 60)
     if mins < 1 { return "Just now" }

@@ -1,7 +1,6 @@
 import ScribeXCore
 import SwiftUI
 
-/// The issues in the last build, translated, with any fix that is safe to offer.
 struct MarksView: View {
     @Environment(AppModel.self) private var model
 
@@ -88,7 +87,6 @@ private struct MarkRow: View {
     }
 }
 
-/// What the run did, under the spread. Collapsed by default.
 struct PressLogView: View {
     @Environment(AppModel.self) private var model
 

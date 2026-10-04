@@ -1,16 +1,9 @@
-/*
- * TeX log → marginalia.
- *
- * TeX's own wording ("Undefined control sequence", "Missing $ inserted") tells
- * you what the parser felt, not what you did wrong. This module translates the
- * cases worth translating into a heading and a sentence, and — where the fix is
- * unambiguous — an edit the reader can accept. Anything it cannot translate is
- * passed through verbatim rather than guessed at.
- */
+// TeX's wording says what the parser felt, not what the writer did wrong. The
+// cases worth translating get a heading, a sentence and, only where the fix is
+// unambiguous, an edit to accept; anything else passes through verbatim.
 
 import Foundation
 
-/// A single-line edit offered beside a mark. Applied by the caller.
 public struct Fix: Hashable, Sendable {
     public var label: String
     /// 1-based line in the source.
@@ -32,11 +25,8 @@ public struct Diagnostic: Hashable, Sendable, Identifiable {
     }
 
     public var severity: Severity
-    /// Short heading for the marginalia.
     public var title: String
-    /// Explanatory sentence, when we have something better than the raw message.
     public var detail: String?
-    /// TeX's own wording, always kept.
     public var raw: String
     public var line: Int?
     public var fixes: [Fix]
@@ -53,7 +43,7 @@ public struct Diagnostic: Hashable, Sendable, Identifiable {
         self.fixes = fixes
     }
 
-    /// Stable identity for a mark, shared by de-duplication and "Ignore".
+    /// Shared by de-duplication and "Ignore", so it must not change between builds.
     public var key: String {
         "\(severity.rawValue):\(title):\(line.map(String.init) ?? "")"
     }
@@ -61,18 +51,17 @@ public struct Diagnostic: Hashable, Sendable, Identifiable {
     public var id: String { key }
 }
 
-/// What the parser can consult to make a suggestion.
 public struct LogContext: Sendable {
     public var source: String
-    /// Keys defined in the project's .bib files, for resolving citation typos.
     public var bibKeys: [String]
-    /// File the .bib keys came from, named in the explanation.
     public var bibName: String?
+    public var absentFiles: Set<String>
 
-    public init(source: String = "", bibKeys: [String] = [], bibName: String? = nil) {
+    public init(source: String = "", bibKeys: [String] = [], bibName: String? = nil, absentFiles: Set<String> = []) {
         self.source = source
         self.bibKeys = bibKeys
         self.bibName = bibName
+        self.absentFiles = absentFiles
     }
 }
 
@@ -80,8 +69,6 @@ nonisolated(unsafe) private let errorLine = #/^! (.+)$/#
 nonisolated(unsafe) private let sourceLine = #/^l\.(\d+)/#
 nonisolated(unsafe) private let warningLine = #/^(?:LaTeX|Package|Class)(?: (\S+))? Warning: (.+)$/#
 nonisolated(unsafe) private let warningAt = #/input line (\d+)/#
-
-// MARK: - translation
 
 nonisolated(unsafe) private let undefinedCite = #/Citation [`'"]([^'"`]+)['"`] on page \d+ undefined/#
 nonisolated(unsafe) private let undefinedRef = #/Reference [`'"]([^'"`]+)['"`] on page \d+ undefined/#
@@ -102,7 +89,6 @@ func levenshtein(_ a: String, _ b: String) -> Int {
     return prev[b.count]
 }
 
-/// The closest candidate, if one is close enough to be worth proposing.
 func nearest(_ target: String, in pool: [String]) -> String? {
     var best: String?
     var bestD = Int.max
@@ -118,12 +104,10 @@ func nearest(_ target: String, in pool: [String]) -> String? {
     return best != nil && bestD <= allowed ? best : nil
 }
 
-/// Labels the document defines, for resolving \ref typos.
 private func labels(in source: String) -> [String] {
     source.matches(of: #/\\label\s*\{([^}]+)\}/#).map { String($0.1) }
 }
 
-/// Locate `needle` in the source and return its 1-based line.
 private func lineOf(_ source: String, _ needle: String, from: Int = 1) -> Int? {
     let lines = source.components(separatedBy: "\n")
     var i = from - 1
@@ -180,6 +164,16 @@ private func translate(_ raw: String, line: Int?, context ctx: LogContext) -> Di
             fixes: closeLine.map {
                 [Fix(label: "Fix both to \(opened)", line: $0, find: "\\end{\(closed)}", replace: "\\end{\(opened)}")]
             } ?? []
+        )
+    }
+
+    if let missing = raw.firstMatch(of: fileNotFound), ctx.absentFiles.contains(String(missing.1)) {
+        return Diagnostic(
+            severity: .error,
+            title: "Missing file: \(missing.1)",
+            detail: "The document expects \(missing.1) beside it. It is not part of the TeX distribution, so it cannot be downloaded: put it in the document's folder.",
+            raw: raw,
+            line: line
         )
     }
 
@@ -262,7 +256,8 @@ public func parseLog(_ log: String, context ctx: LogContext = LogContext()) -> [
             if let cont = next, !cont.isEmpty, !"l!(".contains(cont.first!) {
                 raw = "\(raw) \(cont)"
             }
-            if let prefix = raw.firstMatch(of: #/^LaTeX Error:\s*/#) {
+            // Tectonic's log can double the marker: "! ! LaTeX Error: …".
+            if let prefix = raw.firstMatch(of: #/^(?:!\s+)*LaTeX Error:\s*/#) {
                 raw.removeSubrange(prefix.range)
             }
 
@@ -292,12 +287,9 @@ public func parseLog(_ log: String, context ctx: LogContext = LogContext()) -> [
     return out.filter { seen.insert($0.key).inserted }
 }
 
-// MARK: - the press log
-
 public struct PressRow: Hashable, Sendable, Identifiable {
     public var stage: String
     public var detail: String
-    /// Draws the detail in accent when something wants attention.
     public var flagged: Bool
 
     public init(stage: String, detail: String, flagged: Bool = false) {
@@ -316,12 +308,8 @@ private func plural(_ n: Int, _ word: String) -> String {
     "\(n) \(word)\(n > 1 ? "s" : "")"
 }
 
-/// What the run actually did.
-///
-/// Tectonic drives its own passes internally and hands back one wall-clock
-/// duration plus the final TeX log, so this reports per-stage *findings* rather
-/// than per-stage timings — the timings simply are not measured. The total in
-/// the header is real.
+/// Per-stage findings, not timings: Tectonic runs its passes internally and
+/// reports only the total duration.
 public func pressLog(
     _ log: String, source: String = "", name: String = "document.tex", diags: [Diagnostic] = []
 ) -> [PressRow] {

@@ -1,20 +1,13 @@
-/*
- * The window and the menus.
- *
- * One window, built in AppKit so that closing it — by the close button or by
- * ⌘Q — can be held up while unsaved work is dealt with. SwiftUI scenes offer
- * no such hook.
- */
-
 import AppKit
 import ScribeXCore
 import SwiftUI
 
+/// The window is AppKit's so that closing it, by the close button or ⌘Q, can
+/// wait on unsaved work. SwiftUI scenes offer no such hook.
 public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     public let model: AppModel
     private var window: NSWindow?
-    /// Set once the user has agreed to lose unsaved work, so the close that
-    /// follows goes through.
+    /// The user agreed to lose unsaved work, so the next close goes through.
     private var closing = false
 
     public override init() {
@@ -22,8 +15,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         super.init()
     }
 
-    /// The `scribex-typeset` executable: beside the app's own in a bundle, or
-    /// wherever SCRIBEX_WORKER says when running unbundled during development.
+    /// SCRIBEX_WORKER points at a worker outside a bundle, for development.
     private static var worker: URL {
         if let path = ProcessInfo.processInfo.environment["SCRIBEX_WORKER"] {
             return URL(filePath: path)
@@ -33,7 +25,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     }
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
-        // The design is dark only: the page is the one light thing on screen.
+        // The design is dark only.
         NSApp.appearance = NSAppearance(named: .darkAqua)
 
         let window = NSWindow(
@@ -88,8 +80,6 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     }
 }
 
-/// The menu bar. Every shortcut the React app caught on keydown is a menu item
-/// here, so it is discoverable and shows its key.
 public struct AppCommands: Commands {
     let model: AppModel
 

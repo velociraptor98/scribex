@@ -1,15 +1,10 @@
 import AppKit
 import SwiftUI
 
-/// The 40px bar across the top of every screen.
-///
-/// The window's own title bar is transparent, so the traffic lights are drawn
-/// by the system over this one; it leaves room for them and moves the window
-/// when dragged.
+/// The window's own title bar is transparent: the system draws the traffic
+/// lights over this one, which has to move the window when dragged.
 struct TitleBar<Right: View>: View {
-    /// Centred, in small caps. Omitted on the welcome screen.
     var title: String?
-    /// Right-hand indicators: the offline lamp, downloads, autosave.
     @ViewBuilder var right: Right
 
     var body: some View {
@@ -43,8 +38,6 @@ extension TitleBar where Right == EmptyView {
     }
 }
 
-/// Empty title-bar space that drags the window, and zooms it on a double click
-/// as a real title bar would.
 private struct WindowDragArea: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView { DragView() }
     func updateNSView(_ nsView: NSView, context: Context) {}

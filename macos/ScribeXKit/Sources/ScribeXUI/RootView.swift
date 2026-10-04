@@ -1,7 +1,6 @@
 import ScribeXCore
 import SwiftUI
 
-/// Whichever screen is up, with the palette and export sheet over it.
 struct RootView: View {
     @Environment(AppModel.self) private var model
 

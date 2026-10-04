@@ -5,11 +5,12 @@ import ScribeXCore
 /// A development aid: drive the app through a few steps and render the window
 /// to PNGs after each, without needing Screen Recording permission.
 ///
-///     SCRIBEX_DEBUG_SCRIPT="snap welcome; new; wait 3; snap editor" \
-///     SCRIBEX_DEBUG_OUT=/tmp/shots open -W ScribeX.app
+///     SCRIBEX_DEBUG_SCRIPT="snap welcome; new; wait 3; snap editor; quit" \
+///     SCRIBEX_DEBUG_OUT=/tmp/shots ScribeX.app/Contents/MacOS/ScribeX
 ///
-/// Steps: `snap NAME`, `wait SECONDS`, `new`, `palette TEXT`, `close`,
-/// `export`, `marks`, `type TEXT`, `press`, `quit`.
+/// Steps: `snap NAME`, `wait SECONDS`, `new`, `open PATH`, `palette TEXT`,
+/// `close`, `export`, `marks`, `type TEXT`, `press`, `fetch`, `essentials`,
+/// `network`, `state LABEL`, `quit`.
 enum DebugScript {
     static func runIfRequested(model: AppModel, window: NSWindow) {
         let env = ProcessInfo.processInfo.environment
@@ -35,13 +36,20 @@ enum DebugScript {
                 case "press": model.pressOpen.toggle()
                 case "type": model.editor.insert(arg)
                 case "page":
-                    // The first page as the preview draws it, plate and all.
+                    // Neither snapshot route captures PDFKit's page tiles, so
+                    // this renders the page itself.
                     if let page = model.preview?.document.page(at: 0) {
                         let image = page.thumbnail(of: NSSize(width: 600, height: 800), for: .mediaBox)
                         if let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff) {
                             try? rep.representation(using: .png, properties: [:])?.write(to: out.appending(path: "\(arg).png"))
                         }
                     }
+                case "open": model.adopt((try? String(contentsOfFile: arg, encoding: .utf8)) ?? "", url: URL(filePath: arg), note: "Opened")
+                case "fetch": model.build(allowNetwork: true)
+                case "essentials": model.setUp()
+                case "network": model.toggleOffline()
+                case "state":
+                    print("debug state [\(arg)]: status=\(model.status) busy=\(model.busy) missing=\(model.missing ?? "-") cache=\(model.cache) offline=\(model.offline) preview=\(model.preview?.id ?? -1) fetched=\(model.fetched)")
                 case "quit": NSApp.terminate(nil)
                 default: print("debug script: unknown step \(step)")
                 }
@@ -51,8 +59,6 @@ enum DebugScript {
     }
 
     static func snap(_ window: NSWindow, to url: URL) {
-        // Through the layer tree, which holds PDFKit's tiles; cacheDisplay
-        // redraws views and leaves those out.
         guard let view = window.contentView?.superview ?? window.contentView, let layer = view.layer else { return }
         let scale = window.backingScaleFactor
         guard let rep = NSBitmapImageRep(

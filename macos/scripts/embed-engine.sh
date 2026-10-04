@@ -1,12 +1,5 @@
 #!/bin/sh
-# Build the Rust typesetting worker and put it inside the app, with the
-# libraries Tectonic links against. Run by Xcode as the "Embed Typesetting
-# Engine" build phase, after the app's own code is built.
-#
-#   Contents/MacOS/scribex-typeset      the worker, beside the app's executable
-#   Contents/Frameworks/*.dylib         ICU, FreeType, Graphite2, libpng
-#
-# The worker finds the libraries through @executable_path/../Frameworks, an
+# The worker finds its libraries through @executable_path/../Frameworks, an
 # rpath engine/build.rs gives it. Everything is signed here with the app's
 # identity, because Xcode signs only what it copied itself.
 set -eu
@@ -37,7 +30,7 @@ frameworks="$app/Contents/Frameworks"
 worker="$macos/scribex-typeset"
 
 env -i HOME="$HOME" PATH="$tools" PKG_CONFIG_PATH="$pkg_config_path" \
-    sh "$root/scripts/stage-dylibs.sh" "$frameworks"
+    sh "$SRCROOT/scripts/stage-dylibs.sh" "$frameworks"
 
 mkdir -p "$macos"
 cp -f "$root/target/$profile/scribex-typeset" "$worker"
@@ -56,6 +49,10 @@ if [ -n "$leftover" ]; then
     echo "$leftover" >&2
     exit 1
 fi
+
+licenses="$app/Contents/Resources/licenses"
+rm -rf "$licenses"
+cp -R "$SRCROOT/licenses" "$licenses"
 
 # Sign with the identity Xcode signs the app with ("-" when signing to run
 # locally). The hardened runtime's library validation refuses ad-hoc signed

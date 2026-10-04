@@ -1,6 +1,6 @@
 [package]
 name = "scribex-engine"
-version = "0.0.3-alpha"
+version = "0.4.0-alpha"
 description = "Tectonic typesetting for ScribeX, run in a crash-isolated worker process"
 authors = ["Kunal Singh"]
 edition = "2021"
@@ -8,8 +8,6 @@ edition = "2021"
 [lib]
 name = "scribex_engine"
 
-# The worker the macOS app launches for each build. The Tauri app re-executes
-# itself with `--typeset` instead; both speak the protocol in `worker.rs`.
 [[bin]]
 name = "scribex-typeset"
 path = "src/bin/scribex-typeset.rs"

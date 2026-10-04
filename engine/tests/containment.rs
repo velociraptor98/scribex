@@ -1,8 +1,5 @@
-//! A document must not be able to write outside its build directory.
-//!
-//! Runs the real worker (`scribex-typeset`) on a document that tries to
-//! `\openout` through `../` and an absolute path. Needs a primed Tectonic cache,
-//! since the build runs offline; on a cold cache it reports that and passes.
+//! Needs a primed Tectonic cache: this builds offline, and on a cold cache it
+//! reports that and passes.
 
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -35,17 +32,33 @@ fn openout_cannot_escape_the_build_dir() {
         .stderr(Stdio::null())
         .spawn()
         .unwrap();
-    child.stdin.take().unwrap().write_all(req.to_string().as_bytes()).unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(req.to_string().as_bytes())
+        .unwrap();
     let out = child.wait_with_output().unwrap();
     let resp: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
 
-    if resp["status"] != "ok" && resp["message"].as_str().unwrap_or("").contains("tectonic-format") {
+    if resp["status"] != "ok"
+        && resp["message"]
+            .as_str()
+            .unwrap_or("")
+            .contains("tectonic-format")
+    {
         eprintln!("skipped: the Tectonic cache is not primed");
         return;
     }
     assert_eq!(resp["status"], "ok", "build failed: {resp}");
-    assert!(proj.join(".scribex-build/doc.pdf").exists(), "the PDF should still be written");
-    assert!(!proj.join("rel-escape.txt").exists(), "relative \\openout escaped");
+    assert!(
+        proj.join(".scribex-build/doc.pdf").exists(),
+        "the PDF should still be written"
+    );
+    assert!(
+        !proj.join("rel-escape.txt").exists(),
+        "relative \\openout escaped"
+    );
     assert!(!abs.exists(), "absolute \\openout escaped");
     let _ = std::fs::remove_dir_all(&dir);
 }

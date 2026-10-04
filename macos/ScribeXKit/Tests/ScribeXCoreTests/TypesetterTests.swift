@@ -7,12 +7,9 @@ import Testing
 /// report why and pass.
 struct TypesetterTests {
     static let worker = URL(filePath: #filePath)
-        .deletingLastPathComponent()  // ScribeXCoreTests
-        .deletingLastPathComponent()  // Tests
-        .deletingLastPathComponent()  // ScribeXKit
-        .deletingLastPathComponent()  // macos
-        .deletingLastPathComponent()  // repository
-        .appending(path: "target/debug/scribex-typeset")
+        .deletingLastPathComponent()
+        .appending(path: "../../../../target/debug/scribex-typeset")
+        .standardized
 
     static let hello = "\\documentclass{article}\n\\begin{document}\nHello.\n\\end{document}\n"
 
@@ -61,6 +58,26 @@ struct TypesetterTests {
         } catch {
             #expect(!error.superseded)
             #expect(parseLog(error.log).contains { $0.title == "Unknown command" && $0.line == 3 })
+        }
+    }
+
+    @Test func aClassBesideTheDocumentIsAbsentNotMissing() async throws {
+        guard available else { return }
+        let dir = try project()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        do {
+            _ = try await Typesetter(worker: Self.worker).typeset(
+                entry: dir.appending(path: "cv.tex"),
+                source: "\\documentclass{scribex-own-class}\n\\begin{document}x\\end{document}\n",
+                onlyCached: true
+            )
+            Issue.record("expected the build to fail")
+        } catch where error.isColdCache {
+            print("skipped: the Tectonic cache is not primed")
+        } catch {
+            #expect(error.missingFile == nil)
+            #expect(error.absentFile == "scribex-own-class.cls")
         }
     }
 

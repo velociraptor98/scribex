@@ -1,19 +1,11 @@
-/*
- * The ⌘K palette: plain English in, LaTeX out, plus the app's own commands.
- * Snippets rank above commands when the query looks like a request for LaTeX,
- * and below them when it names a command.
- */
-
 import AppKit
 import ScribeXCore
 import SwiftUI
 
-/// Something the palette can run, alongside the snippets.
 struct AppCommand: Identifiable {
     let id: String
     let title: String
     var hint: String?
-    /// Words the query is scored against, beyond those in the title.
     var words: [String] = []
     var disabled = false
     let run: () -> Void
@@ -42,7 +34,6 @@ extension AppModel {
     }
 }
 
-/// A line in the palette: a snippet to insert, or a command to run.
 struct PaletteRow: Identifiable {
     var id: String
     var title: String
@@ -56,7 +47,6 @@ struct PaletteRow: Identifiable {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let cmds = commands.filter { !$0.disabled }
 
-        // No query: the palette is a menu. Show the commands, in their given order.
         if q.isEmpty {
             return cmds.map { PaletteRow(id: $0.id, title: $0.title, hint: $0.hint, score: 1, command: $0) }
         }
@@ -293,7 +283,6 @@ private struct PaletteField: NSViewRepresentable {
         }
     }
 
-    /// Takes focus as soon as it is on screen, with a gilt caret.
     final class FocusingField: NSTextField {
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()

@@ -1,41 +1,35 @@
-/*
- * The app's side of the typesetting worker protocol (engine/src/worker.rs).
- *
- * Tectonic never runs in the app's process: a failed run leaves its C globals
- * dirty and the next one aborts the process (see engine/src/engine.rs). Each
- * build launches the `scribex-typeset` helper instead, sends one JSON request
- * on stdin, and reads one JSON response from stdout. The PDF stays on disk in
- * the document's build directory for us to pick up.
- */
+// Tectonic never runs in the app's process (see engine/src/engine.rs): each
+// build launches the `scribex-typeset` worker and speaks the protocol in
+// engine/src/worker.rs.
 
 import Foundation
 
-/// A finished build.
 public struct Build: Sendable {
     public var pdf: Data
     public var log: String
     public var durationMs: Int
 }
 
-/// A build that did not produce a PDF.
 public struct BuildError: Error, Sendable {
     public var message: String
     public var log: String
-    /// Set when the build failed only because a resource was absent from the
-    /// offline cache — the UI offers "fetch it" rather than showing a TeX error.
+    /// A resource absent from the offline cache, which a download can supply.
     public var missingFile: String?
+    /// A file the bundle lacks too, such as a class or image the document
+    /// expects beside it.
+    public var absentFile: String?
     public var durationMs: Int
-    /// True when a newer build replaced this one before it ran. Not a failure:
-    /// the UI drops these instead of reporting them.
+    /// A newer build replaced this one before it ran. Not a failure to report.
     public var superseded: Bool
 
     public init(
         _ message: String, log: String = "", missingFile: String? = nil,
-        durationMs: Int = 0, superseded: Bool = false
+        absentFile: String? = nil, durationMs: Int = 0, superseded: Bool = false
     ) {
         self.message = message
         self.log = log
         self.missingFile = missingFile
+        self.absentFile = absentFile
         self.durationMs = durationMs
         self.superseded = superseded
     }
@@ -47,48 +41,36 @@ public struct BuildError: Error, Sendable {
     public var isColdCache: Bool { message.contains("tectonic-format-") }
 }
 
-/// Runs typesetting jobs one at a time in worker processes.
+/// Jobs run one at a time. Every build for a document writes the same
+/// `.scribex-build` directory, so two workers at once interleave their
+/// `.aux`/`.log`/`.pdf` writes: multi-pass documents stop converging, and we
+/// could read back the *other* run's PDF. Live preview makes overlap the norm,
+/// since a compile outlasts the 600 ms debounce.
 ///
-/// Every build for a document writes the same `.scribex-build` directory, so
-/// two workers running at once interleave their `.aux`/`.log`/`.pdf` writes:
-/// multi-pass documents stop converging, and we could read back a PDF produced
-/// by the *other* run. Live preview makes overlap the normal case rather than
-/// the exception — the debounce is 600 ms and a compile takes longer than that
-/// — so jobs are queued, not raced.
-///
-/// Queued jobs are also dropped once a newer one exists. Their output would be
-/// discarded by the UI anyway, and skipping them keeps the editor from falling
-/// a build behind after a burst of typing.
+/// Queued previews are dropped once a newer one exists, which keeps the editor
+/// from falling a build behind after a burst of typing.
 public actor Typesetter {
-    /// What to do with a queued job that a newer one has overtaken.
-    ///
-    /// Dropping is only safe when the job's *output* is all it was for, which is
-    /// true of a preview: the UI shows the newest build and throws the rest away.
-    /// A job that fetches resources also populates the shared cache on disk, and
-    /// that outlives the PDF nobody looks at — so priming the cache, or an
-    /// explicit "fetch it", runs to completion even once its result is unwanted.
+    /// Dropping is only safe when the job's output is all it was for. A job that
+    /// fetches resources also fills the shared cache, which outlives the unwanted
+    /// PDF, so priming the cache or an explicit "fetch it" always runs.
     public enum IfSuperseded: Sendable {
         case drop, run
     }
 
-    /// Written once the first-run download has completed. Its absence is what
-    /// makes the app offer that download.
+    /// Its absence makes the app offer the first-run download.
     static let readyMarker = "cache-ready"
 
     private let worker: URL
-    /// Highest ticket issued so far.
     private var latest: UInt64 = 0
-    /// Whether a job holds the slot. Held for the whole job, PDF read included,
-    /// so the bytes we return are the ones our own worker wrote.
+    /// Held for the whole job, PDF read included, so the bytes we return are the
+    /// ones our own worker wrote.
     private var running = false
     private var waiting: [CheckedContinuation<Void, Never>] = []
 
-    /// `worker` is the `scribex-typeset` executable.
     public init(worker: URL) {
         self.worker = worker
         // A worker that dies before reading its request would otherwise take the
-        // app down with it: writing to its closed stdin raises SIGPIPE. Rust
-        // programs ignore it from the start, which is how the Tauri app got this.
+        // app down with it: writing to its closed stdin raises SIGPIPE.
         signal(SIGPIPE, SIG_IGN)
     }
 
@@ -100,12 +82,9 @@ public actor Typesetter {
         outputDirectory(for: entry).appending(path: entry.deletingPathExtension().lastPathComponent + ".pdf")
     }
 
-    /// Typeset `source` as if it were the file at `entry`, and return the PDF.
     /// The file at `entry` is neither read nor written; its directory is where
-    /// `\input` and `\includegraphics` resolve, and where the build directory goes.
-    ///
-    /// One job runs at a time. `onFetch` hears the name of each resource the
-    /// engine starts downloading, on a background thread.
+    /// `\input` and `\includegraphics` resolve. `onFetch` is called on a
+    /// background thread.
     public func typeset(
         entry: URL,
         source: String,
@@ -137,21 +116,18 @@ public actor Typesetter {
             } catch {
                 throw BuildError("no PDF produced: \(error.localizedDescription)", log: log, durationMs: durationMs)
             }
-        case let .err(message, log, missingFile, durationMs):
-            throw BuildError(message, log: log, missingFile: missingFile, durationMs: durationMs)
+        case let .err(message, log, missingFile, absentFile, durationMs):
+            throw BuildError(message, log: log, missingFile: missingFile, absentFile: absentFile, durationMs: durationMs)
         }
     }
 
-    /// Whether the first-run download has completed on this machine. A marker
-    /// rather than a probe build, which takes seconds to fail on an empty cache.
-    /// If the cache is cleared later, `BuildError.isColdCache` catches it.
+    /// A marker rather than a probe build, which takes seconds to fail on an
+    /// empty cache. A cache cleared later is caught by `BuildError.isColdCache`.
     public nonisolated static func cacheReady(in dataDirectory: URL) -> Bool {
         FileManager.default.fileExists(atPath: dataDirectory.appending(path: readyMarker).path)
     }
 
-    /// Prime the offline cache with the engine's warmup document, then each of
-    /// `documents` (the built-in plates), with the network allowed. Returns the
-    /// time taken in milliseconds. An interrupted run can be retried; what
+    /// Returns milliseconds taken. An interrupted run can be retried: what
     /// arrived stays cached.
     public func warmUp(
         documents: [String],
@@ -194,7 +170,6 @@ public actor Typesetter {
         await withCheckedContinuation { waiting.append($0) }
     }
 
-    /// Hand the slot straight to the next job in line, if there is one.
     private func release() {
         if waiting.isEmpty {
             running = false
@@ -203,8 +178,6 @@ public actor Typesetter {
         }
     }
 }
-
-// MARK: - the worker process
 
 struct WorkerRequest: Encodable {
     var entry: String
@@ -221,12 +194,13 @@ struct WorkerRequest: Encodable {
 
 enum WorkerResponse: Decodable {
     case ok(log: String, durationMs: Int)
-    case err(message: String, log: String, missingFile: String?, durationMs: Int)
+    case err(message: String, log: String, missingFile: String?, absentFile: String?, durationMs: Int)
 
     enum CodingKeys: String, CodingKey {
         case status, log, message
         case durationMs = "duration_ms"
         case missingFile = "missing_file"
+        case absentFile = "absent_file"
     }
 
     init(from decoder: any Decoder) throws {
@@ -241,22 +215,20 @@ enum WorkerResponse: Decodable {
                 message: try c.decode(String.self, forKey: .message),
                 log: log,
                 missingFile: try c.decodeIfPresent(String.self, forKey: .missingFile),
+                absentFile: try c.decodeIfPresent(String.self, forKey: .absentFile),
                 durationMs: durationMs
             )
         }
     }
 
     static func failure(_ message: String) -> Self {
-        .err(message: message, log: "", missingFile: nil, durationMs: 0)
+        .err(message: message, log: "", missingFile: nil, absentFile: nil, durationMs: 0)
     }
 }
 
-/// Prefix of the stderr line the worker writes as it starts downloading a
-/// resource. stdout carries the one JSON response and nothing else.
 private let fetchPrefix = "scribex-fetch\t"
 
 extension Typesetter {
-    /// Run one job in a fresh worker process, off the actor.
     static func run(
         _ worker: URL, _ request: WorkerRequest, onFetch: @escaping @Sendable (String) -> Void
     ) async -> WorkerResponse {
@@ -305,8 +277,7 @@ extension Typesetter {
         progress.wait()
 
         if out.isEmpty {
-            // No response at all: the engine aborted or was killed. Isolating
-            // this is the entire point of the worker process.
+            // The engine aborted or was killed: what the worker process is for.
             let status = process.terminationReason == .uncaughtSignal
                 ? "signal: \(process.terminationStatus)"
                 : "exit status: \(process.terminationStatus)"
@@ -325,7 +296,10 @@ extension Typesetter {
 
     private static func forEachLine(of handle: FileHandle, _ body: (String) -> Void) {
         var buffer = Data()
-        while case let chunk = handle.availableData, !chunk.isEmpty {
+        while true {
+            // Blocks until there is output; empty means the worker closed stderr.
+            let chunk = handle.availableData
+            if chunk.isEmpty { return }
             buffer.append(chunk)
             while let newline = buffer.firstIndex(of: UInt8(ascii: "\n")) {
                 body(String(decoding: buffer[buffer.startIndex..<newline], as: UTF8.self))
@@ -334,7 +308,6 @@ extension Typesetter {
         }
     }
 
-    /// The engine's warmup document, from the worker binary that holds it.
     static func warmupDocument(_ worker: URL) async throws(BuildError) -> String {
         let result: Result<String, BuildError> = await withCheckedContinuation { done in
             DispatchQueue.global(qos: .userInitiated).async {
@@ -357,44 +330,4 @@ extension Typesetter {
         }
         return try result.get()
     }
-}
-
-// MARK: - files
-
-/// Write the buffer to disk. The only place the user's document is modified.
-public func saveDocument(_ source: String, to url: URL) throws(FileError) {
-    let dir = url.deletingLastPathComponent()
-    do {
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    } catch {
-        throw FileError("cannot create \(dir.path): \(error.localizedDescription)")
-    }
-    do {
-        // Written in place rather than atomically, as before: a rename would
-        // replace a symlinked or hard-linked document instead of updating it.
-        try Data(source.utf8).write(to: url)
-    } catch {
-        throw FileError("cannot save \(url.path): \(error.localizedDescription)")
-    }
-}
-
-/// Copy the most recent build output for `entry` to `destination`, and return
-/// its size in bytes.
-public func exportPDF(for entry: URL, to destination: URL) throws(FileError) -> Int {
-    let src = Typesetter.pdfURL(for: entry)
-    guard let data = FileManager.default.contents(atPath: src.path) else {
-        throw FileError("nothing to export yet — build the document first")
-    }
-    do {
-        try data.write(to: destination)
-    } catch {
-        throw FileError("cannot write \(destination.path): \(error.localizedDescription)")
-    }
-    return data.count
-}
-
-public struct FileError: Error, Sendable, CustomStringConvertible {
-    public var message: String
-    public init(_ message: String) { self.message = message }
-    public var description: String { message }
 }

@@ -1,7 +1,6 @@
 import ScribeXCore
 import SwiftUI
 
-/// The spread: contents · source · preview, with the press log beneath.
 struct EditorScreen: View {
     @Environment(AppModel.self) private var model
 
@@ -26,6 +25,17 @@ struct EditorScreen: View {
                 .disabled(model.busy)
             }
 
+            if let absent = model.absent {
+                Banner {
+                    Text("\(Text(absent).font(Fonts.mono(12.5)).foregroundStyle(Tone.accent300)) was not found. It is not part of the TeX distribution, so it cannot be downloaded — put it in the same folder as \(model.name).")
+                        .lineLimit(2)
+                    if model.path != nil {
+                        Button("Show the folder", action: model.revealFolder)
+                            .buttonStyle(InkButtonStyle(size: .small))
+                    }
+                }
+            }
+
             GeometryReader { geo in
                 let narrow = geo.size.width < 1040
                 HStack(spacing: 0) {
@@ -42,7 +52,6 @@ struct EditorScreen: View {
         }
     }
 
-    /// 46% of the spread, within a readable range.
     private func rectoWidth(_ width: CGFloat, narrow: Bool) -> CGFloat {
         min(640, max(narrow ? 300 : 360, width * 0.46))
     }
@@ -84,7 +93,6 @@ struct EditorScreen: View {
     }
 }
 
-/// The gilt rule down the fold of the spread.
 private struct Fold: View {
     var body: some View {
         LinearGradient(
@@ -99,8 +107,6 @@ private struct Fold: View {
         .frame(width: 1)
     }
 }
-
-// MARK: - contents
 
 private struct ContentsMargin: View {
     @Environment(AppModel.self) private var model
@@ -208,8 +214,6 @@ private struct ContentsRow: View {
         .help("line \(entry.line)")
     }
 }
-
-// MARK: - the recto: preview and issues
 
 private struct Recto: View {
     @Environment(AppModel.self) private var model

@@ -1,17 +1,9 @@
-/*
- * Design tokens, carried over from theme.css.
- *
- * The light "Classical" ramps are kept because the typeset page is light: a
- * PDF sits on paper, framed by a dark surround. Everything outside the page
- * uses the ink scale.
- */
-
 import AppKit
 import CoreText
 import SwiftUI
 
 extension NSColor {
-    nonisolated convenience init(rgb: UInt32, alpha: CGFloat = 1) {
+    convenience init(rgb: UInt32, alpha: CGFloat = 1) {
         self.init(
             srgbRed: CGFloat((rgb >> 16) & 0xFF) / 255,
             green: CGFloat((rgb >> 8) & 0xFF) / 255,
@@ -21,37 +13,29 @@ extension NSColor {
     }
 }
 
-/// Colours as AppKit sees them, for the editor and the preview. Nonisolated:
-/// PDFKit draws pages off the main thread.
-nonisolated enum Ink {
-    // — the press: surfaces outside the page —
-    static let ground = NSColor(rgb: 0x171614)  // window ground
-    static let raised = NSColor(rgb: 0x1C1B19)  // title bar, press log, dialog footers
-    static let editor = NSColor(rgb: 0x1A1917)  // the source pane
-    static let deep = NSColor(rgb: 0x141312)  // preview well, side panels
-    static let panel = NSColor(rgb: 0x201F1D)  // palette and dialog bodies
+enum Ink {
+    static let ground = NSColor(rgb: 0x171614)
+    static let raised = NSColor(rgb: 0x1C1B19)
+    static let editor = NSColor(rgb: 0x1A1917)
+    static let deep = NSColor(rgb: 0x141312)
+    static let panel = NSColor(rgb: 0x201F1D)
 
-    // — the page —
     static let paper = NSColor(rgb: 0xF3F2F2)
     static let paperInk = NSColor(rgb: 0x201F1D)
     static let plateEdge = NSColor(rgb: 0x2D2B2B)
 
-    // — ink-side type —
     static let text = NSColor(rgb: 0xECE7DF)
     static func text(_ alpha: CGFloat) -> NSColor { NSColor(rgb: 0xECE7DF, alpha: alpha) }
 
-    // — accent: the gilt of a bound spine —
     static let accent = NSColor(rgb: 0xC28D41)
     static let accent300 = NSColor(rgb: 0xFACB8D)
     static let accent400 = NSColor(rgb: 0xE1AD66)
     static func accent(_ alpha: CGFloat) -> NSColor { NSColor(rgb: 0xC28D41, alpha: alpha) }
 
-    /// Errors stay within the palette — a proof-reader's red would shout. The
-    /// accent already means "attention"; severity is carried by weight and rule.
+    /// Errors stay within the palette: a proof-reader's red would shout.
     static let mark = NSColor(rgb: 0xD98168)
 }
 
-/// The same tokens for SwiftUI, named as in theme.css.
 enum Tone {
     static let ink = Color(nsColor: Ink.ground)
     static let inkRaised = Color(nsColor: Ink.raised)
@@ -86,17 +70,12 @@ enum Tone {
     static let accent300 = Color(nsColor: Ink.accent300)
     static let accent400 = Color(nsColor: Ink.accent400)
     static let accentWash = Color(nsColor: Ink.accent(0.1))
-    static let accentWashSoft = Color(nsColor: Ink.accent(0.07))
     static let accentEdge = Color(nsColor: Ink.accent(0.4))
 
     static let mark = Color(nsColor: Ink.mark)
     static let scrim = Color(nsColor: NSColor(rgb: 0x0C0B0A, alpha: 0.72))
 }
 
-// MARK: - type
-
-/// Cormorant Garamond for headings, Lora for text, the system monospace for
-/// code. The two serifs ship in the package (SIL OFL) so the app works offline.
 enum Fonts {
     /// Register the bundled faces with this process. Only the Latin subsets:
     /// their extended siblings share PostScript names, so registering both
@@ -133,7 +112,6 @@ enum Fonts {
 }
 
 extension View {
-    /// Small caps rubric: the uppercase letterspaced labels that title every panel.
     func rubric(_ color: Color = Tone.text38, size: CGFloat = 10.5, tracking: CGFloat = 0.18) -> some View {
         font(Fonts.body(size))
             .textCase(.uppercase)
@@ -142,7 +120,6 @@ extension View {
     }
 }
 
-/// The 1px rules between sections.
 struct Hairline: View {
     var color = Tone.rule
     var vertical = false
@@ -154,7 +131,6 @@ struct Hairline: View {
     }
 }
 
-/// A small round lamp, for saved/unsaved, offline and downloading states.
 struct Dot: View {
     var color: Color
     var hollow = false
@@ -171,7 +147,6 @@ struct Dot: View {
 }
 
 extension View {
-    /// The pulse used for work in progress: down to 45% and back.
     func pulsing(_ on: Bool, period: Double = 1.1) -> some View {
         modifier(Pulse(on: on, period: period))
     }
@@ -192,9 +167,6 @@ private struct Pulse: ViewModifier {
     }
 }
 
-// MARK: - controls
-
-/// `.btn` and `.btn-primary` from the stylesheet.
 struct InkButtonStyle: ButtonStyle {
     enum Size { case small, regular, large }
 
@@ -237,7 +209,6 @@ struct InkButtonStyle: ButtonStyle {
     }
 }
 
-/// `.linkish`: text that underlines in gilt on hover.
 struct LinkishButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         Linkish(configuration: configuration)
@@ -261,8 +232,6 @@ struct LinkishButtonStyle: ButtonStyle {
     }
 }
 
-/// A button with no chrome that changes colour on hover. The building block
-/// for tabs, zoom controls and list rows.
 struct HoverButtonStyle: ButtonStyle {
     var color: Color = Tone.text55
     var hover: Color = Tone.text
@@ -288,7 +257,6 @@ struct HoverButtonStyle: ButtonStyle {
     }
 }
 
-/// Keycap, for shortcut hints.
 struct Keycap: View {
     var label: String
     var color = Tone.text55

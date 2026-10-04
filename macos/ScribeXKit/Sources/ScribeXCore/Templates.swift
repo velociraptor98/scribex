@@ -1,8 +1,6 @@
-/// Templates offered on the welcome screen. The first-run download fetches
-/// everything they use, so each builds offline.
+/// The first-run download builds each of these, so every plate works offline.
 public struct Plate: Hashable, Sendable, Identifiable {
     public var name: String
-    /// Shown under the name on the welcome screen.
     public var note: String
     public var source: String
 

@@ -1,11 +1,3 @@
-/*
- * The preview: PDFKit in place of the PDF.js renderer.
- *
- * It keeps the reading position across rebuilds — otherwise every keystroke
- * would throw the reader back to page 1 — and reports the scale, page count
- * and page in view for the footer beneath it.
- */
-
 import PDFKit
 import SwiftUI
 
@@ -81,9 +73,9 @@ struct PreviewView: NSViewRepresentable {
         }
     }
 
-    /// Replace the document, keeping the scroll position where the page layout
-    /// allows. An edit rarely moves the pages, so the same offset shows the
-    /// same place.
+    /// Keeps the scroll offset, or every rebuild would throw the reader back to
+    /// page 1. An edit rarely moves the pages, so the same offset shows the same
+    /// place.
     private func swap(in document: PDFDocument?, on view: PDFView) {
         let clip = view.documentView?.enclosingScrollView?.contentView
         let origin = clip?.bounds.origin
@@ -135,17 +127,14 @@ struct PreviewView: NSViewRepresentable {
     }
 }
 
-/// Draws each visible page as a plate — a sheet of paper in a dark 7pt border
-/// with a faint outline, as `.plate` was in the stylesheet — over the PDF
-/// view. The border sits outside the page, so it hides none of it, and stays
-/// 7pt at any zoom.
+/// Drawn over the PDF view rather than into the pages, so the border sits
+/// outside each page, hides none of it, and stays 7pt at any zoom.
 final class Plates: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     override func draw(_ dirtyRect: NSRect) {
-        guard let pdf = superview as? PDFView, let document = pdf.document else { return }
+        guard let pdf = superview as? PDFView, pdf.document != nil else { return }
         for page in pdf.visiblePages {
-            _ = document  // pages belong to the document on screen
             let rect = convert(pdf.convert(page.bounds(for: pdf.displayBox), from: page), from: pdf)
             guard rect.intersects(dirtyRect) else { continue }
             Ink.text(0.14).setStroke()

@@ -1,13 +1,10 @@
-//! Tectonic-backed typesetting. No TeX Live on disk; the engine is linked in.
-//!
 //! IMPORTANT: this module must only ever be called from the short-lived worker
-//! process (`scribex-typeset`, or `scribex --typeset` in the Tauri app), never
-//! from the GUI process. Tectonic's C engines keep global state, and a *failed*
-//! xdvipdfmx run leaves a stale output handle behind. The next call then panics
-//! inside `ttbc_output_close`, which is `extern "C"` and therefore cannot
-//! unwind — so it aborts the process outright.
-//! Upstream's CLI never trips over this because it runs one process per
-//! document; we do the same. See `worker.rs`.
+//! process (`scribex-typeset`), never from the GUI process. Tectonic's C
+//! engines keep global state, and a *failed* xdvipdfmx run leaves a stale
+//! output handle behind. The next call then panics inside `ttbc_output_close`,
+//! which is `extern "C"` and therefore cannot unwind — so it aborts the
+//! process outright. Upstream's CLI never trips over this because it runs one
+//! process per document; we do the same. See `worker.rs`.
 //!
 //! `only_cached` is the offline switch: when true the bundle refuses all network
 //! access and any resource missing from the local cache fails the build.
@@ -17,7 +14,7 @@ use std::path::{Component, Path, PathBuf};
 use tectonic::config::PersistentConfig;
 use tectonic::driver::{OutputFormat, ProcessingSessionBuilder};
 use tectonic::io::memory::MemoryFileCollection;
-use tectonic::status::StatusBackend;
+use tectonic::status::{NoopStatusBackend, StatusBackend};
 
 pub struct CompileOk {
     pub log: String,
@@ -27,9 +24,11 @@ pub struct CompileOk {
 pub struct CompileErr {
     pub message: String,
     pub log: String,
-    /// Set when the build failed only because a resource was absent from the
-    /// offline cache — the UI offers "fetch it" rather than showing a TeX error.
+    /// A resource absent from the offline cache, which a download can supply.
     pub missing_file: Option<String>,
+    /// A file the bundle lacks too, such as a class or image the document
+    /// expects beside it.
+    pub absent_file: Option<String>,
     pub duration_ms: u64,
 }
 
@@ -70,12 +69,48 @@ fn missing_file_from_log(log: &str) -> Option<String> {
     None
 }
 
+/// Split a missing file into one the bundle can supply (`missing_file`) and
+/// one it cannot (`absent_file`).
+///
+/// Font names come without an extension and resolve through search rules, so
+/// only plain file names are judged; anything else, or a cache with no index
+/// to ask, is assumed fetchable.
+fn classify_missing(name: Option<String>) -> (Option<String>, Option<String>) {
+    match name {
+        Some(n) if n.contains('.') && bundle_has(&n) == Some(false) => (None, Some(n)),
+        other => (other, None),
+    }
+}
+
+/// Whether the bundle has `name`, judged from its index in the local cache.
+///
+/// Never touches the network: the bundle is opened cache-only, and a build
+/// only reports a missing file after it has loaded that index itself.
+fn bundle_has(name: &str) -> Option<bool> {
+    let config = PersistentConfig::open(false).ok()?;
+    let mut bundle = config.default_bundle(true).ok()?;
+    // The file list needs the index loaded, which the first lookup does.
+    let _ = bundle.input_open_name("tectonic-format-latex.tex", &mut NoopStatusBackend {});
+    let files = bundle.all_files();
+    if files.is_empty() {
+        return None;
+    }
+    Some(
+        files
+            .iter()
+            .any(|f| f == name || f.rsplit('/').next() == Some(name)),
+    )
+}
+
 /// A bare file name that stays inside the directory it is joined to: no
 /// separators, no `..`, not absolute. TeX's `\openout` takes any name the
 /// document gives it, and `Path::join` with an absolute path discards the base.
 fn is_plain_name(name: &str) -> bool {
     let mut parts = Path::new(name).components();
-    matches!((parts.next(), parts.next()), (Some(Component::Normal(_)), None))
+    matches!(
+        (parts.next(), parts.next()),
+        (Some(Component::Normal(_)), None)
+    )
 }
 
 /// Refuse a build directory that is not a real directory. A project arrives
@@ -84,7 +119,10 @@ fn is_plain_name(name: &str) -> bool {
 fn ensure_real_dir(dir: &Path) -> Result<(), String> {
     match std::fs::symlink_metadata(dir) {
         Ok(m) if m.file_type().is_dir() => Ok(()),
-        Ok(_) => Err(format!("{} is not a directory; refusing to build into it", dir.display())),
+        Ok(_) => Err(format!(
+            "{} is not a directory; refusing to build into it",
+            dir.display()
+        )),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             std::fs::create_dir_all(dir).map_err(|e| format!("cannot create output dir: {e}"))
         }
@@ -123,13 +161,7 @@ fn write_outputs(files: &MemoryFileCollection, out_dir: &Path) -> Result<(), Str
 }
 
 /// Typeset `source` as if it were the file at `entry`, without touching that
-/// file. The editor buffer is fed to the engine directly, so live preview never
-/// writes to the user's document — only `save_document` does.
-///
-/// `status` hears Tectonic's progress notes, including each resource it
-/// downloads; the worker forwards those to the GUI.
-///
-/// `entry`'s directory is still the filesystem root, so `\input`,
+/// file. `entry`'s directory is still the filesystem root, so `\input`,
 /// `\includegraphics` and friends resolve against the real project on disk.
 /// Intermediates and the PDF land in `out_dir` (see `write_outputs`), which is
 /// kept between runs so aux/toc files survive and multi-pass documents converge.
@@ -143,11 +175,15 @@ pub fn compile(
     let started = std::time::Instant::now();
     let ms = |t: std::time::Instant| t.elapsed().as_millis() as u64;
 
-    let fail = |msg: String, log: String| CompileErr {
-        missing_file: missing_file_from_log(&log),
-        message: msg,
-        log,
-        duration_ms: ms(started),
+    let fail = |msg: String, log: String| {
+        let (missing_file, absent_file) = classify_missing(missing_file_from_log(&log));
+        CompileErr {
+            missing_file,
+            absent_file,
+            message: msg,
+            log,
+            duration_ms: ms(started),
+        }
     };
 
     let root = entry.parent().unwrap_or(Path::new("."));
@@ -179,7 +215,10 @@ pub fn compile(
         .output_format(OutputFormat::Pdf)
         .print_stdout(false);
 
-    let stem = Path::new(name).file_stem().and_then(|s| s.to_str()).unwrap_or("main");
+    let stem = Path::new(name)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("main");
     let log_of = |files: &MemoryFileCollection| {
         files
             .get(&format!("{stem}.log"))
@@ -203,7 +242,10 @@ pub fn compile(
     }
     write_outputs(&files, out_dir).map_err(|e| fail(e, log.clone()))?;
 
-    Ok(CompileOk { log, duration_ms: ms(started) })
+    Ok(CompileOk {
+        log,
+        duration_ms: ms(started),
+    })
 }
 
 /// A document that touches the resources a cold cache is most likely to lack:
@@ -248,7 +290,15 @@ mod tests {
     fn outputs(entries: &[(&str, &str)]) -> MemoryFileCollection {
         entries
             .iter()
-            .map(|(n, d)| (n.to_string(), MemoryFileInfo { data: d.as_bytes().to_vec(), unix_mtime: None }))
+            .map(|(n, d)| {
+                (
+                    n.to_string(),
+                    MemoryFileInfo {
+                        data: d.as_bytes().to_vec(),
+                        unix_mtime: None,
+                    },
+                )
+            })
             .collect()
     }
 
@@ -294,7 +344,10 @@ mod tests {
         write_outputs(&outputs(&[("doc.aux", "aux")]), &out).unwrap();
 
         assert_eq!(std::fs::read_to_string(&target).unwrap(), "original");
-        assert!(!std::fs::symlink_metadata(out.join("doc.aux")).unwrap().file_type().is_symlink());
+        assert!(!std::fs::symlink_metadata(out.join("doc.aux"))
+            .unwrap()
+            .file_type()
+            .is_symlink());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

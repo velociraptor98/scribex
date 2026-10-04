@@ -73,6 +73,16 @@ struct TexLogTests {
         #expect(d.raw.hasPrefix("File `tikz.sty' not found."))
     }
 
+    @Test func aFileNoDownloadCanSupplyIsNotOfferedAsOne() {
+        let log = "! ! LaTeX Error: File `resume.cls' not found..\n\nType X to quit.\n"
+        let d = parseLog(log, context: LogContext(absentFiles: ["resume.cls"]))[0]
+
+        #expect(d.raw == "File `resume.cls' not found..")
+
+        #expect(d.title == "Missing file: resume.cls")
+        #expect(d.detail?.contains("cannot be downloaded") == true)
+    }
+
     @Test func untranslatedMessagesPassThroughVerbatim() {
         let d = parseLog("! Something nobody anticipated.\n")[0]
         #expect(d.title == "Something nobody anticipated.")

@@ -1,11 +1,6 @@
-/*
- * Making the export sheet's options real.
- *
- * The engine copies whatever the last build produced, so an export option only
- * means something if it changes the document that gets built. Both options here
- * do that by rewriting the source for one throwaway build — the buffer on
- * screen and the file on disk are never touched.
- */
+// An export option only means something if it changes the document that gets
+// built, so each one rewrites the source for a throwaway build. The buffer and
+// the file on disk are never touched.
 
 import Foundation
 
@@ -22,7 +17,6 @@ public enum Sheet: String, CaseIterable, Sendable, Identifiable {
         }
     }
 
-    /// The class option that selects this paper size.
     public var option: String {
         switch self {
         case .letter: "letterpaper"
@@ -67,7 +61,6 @@ public func withHyperref(_ source: String) -> String {
 public struct ExportOptions: Hashable, Sendable {
     public var sheet: Sheet
     public var hyperlinks: Bool
-    /// Write the .tex next to the PDF.
     public var sourceAlongside: Bool
 
     public init(sheet: Sheet, hyperlinks: Bool = false, sourceAlongside: Bool = false) {
@@ -86,8 +79,6 @@ public struct ExportOptions: Hashable, Sendable {
     }
 }
 
-/// The paper size the document already declares, so the sheet control opens on
-/// the truth rather than on a guess.
 public func sheetOf(_ source: String) -> Sheet {
     let opts = (source.firstMatch(of: documentClass)?.2.map(String.init) ?? "")
         .split(separator: ",")

@@ -1,5 +1,3 @@
 [workspace]
-# `engine` is the typesetter both front ends share. `src-tauri` is the original
-# shell, kept building until the macOS app in `macos/` reaches parity.
-members = ["engine", "src-tauri"]
+members = ["engine"]
 resolver = "2"
