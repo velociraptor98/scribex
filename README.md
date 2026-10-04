@@ -1,18 +1,18 @@
 # ScribeX
 
-An offline LaTeX editor. Tauri shell, CodeMirror 6 editor, PDF.js viewer, and
-[Tectonic](https://tectonic-typesetting.github.io/) as the typesetting engine.
-No TeX Live installation or server is needed.
+An offline LaTeX editor for macOS: a native Swift app (SwiftUI, STTextView,
+PDFKit) over [Tectonic](https://tectonic-typesetting.github.io/), which is
+driven from Rust. No TeX Live installation or server is needed.
 
 ## Features
 
 - Open, edit, save (⌘S), save as (⇧⌘S) and export to PDF (⌘E).
-- Live rebuild 600 ms after you stop typing. A rebuild takes about 700 ms in a
-  debug build once resources are cached.
+- Live rebuild 600 ms after you stop typing. A rebuild takes about 700 ms once
+  resources are cached.
 - Section outline, and TeX log errors that jump to the offending line. Some
   errors come with a one-click fix.
 - ⌘K palette: describe a snippet in plain English ("3 by 4 table") or run any
-  app command. There is no toolbar.
+  app command. Every command is also in the menu bar.
 - Export options for paper size and hyperlinked cross-references.
 - Starter templates: article, letter, thesis, Beamer.
 
@@ -22,99 +22,158 @@ from memory, so the file on disk changes only when you save. `\input` and
 
 Not built yet: SyncTeX, a project file tree, a bundled resource cache.
 
-## Running
+## Building
 
-Requires Rust, Node, and the C libraries Tectonic links against:
+Requires Xcode 26 or later, Rust, and the C libraries Tectonic links against:
 
 ```sh
 brew install harfbuzz freetype icu4c openssl@3 graphite2 libpng fontconfig
-export PKG_CONFIG_PATH="$(brew --prefix icu4c)/lib/pkgconfig:$(brew --prefix openssl@3)/lib/pkgconfig:$(brew --prefix)/lib/pkgconfig"
-
-npm install
-npm run tauri dev
 ```
 
-`brew --prefix` resolves the paths, so this works on Apple Silicon
-(`/opt/homebrew`), Intel (`/usr/local`) and custom Homebrew locations. ICU and
-OpenSSL are keg-only, so pkg-config can't find them without these entries.
-Add the line to your shell profile to keep it across sessions.
-
-The first Rust build compiles Tectonic's vendored C and takes several minutes.
-
-**The first run needs the network once.** On a cold cache even `\maketitle`
-fails offline, because its display-size font isn't cached. Click **Prime full
-cache** when the banner appears. [docs/OFFLINE.md](docs/OFFLINE.md) has the
-details.
-
-## Building the macOS app
-
-With `PKG_CONFIG_PATH` set as above:
+Then open `macos/ScribeX.xcodeproj` and run the ScribeX scheme, or from a
+terminal:
 
 ```sh
-npm run tauri build       # ad-hoc signed, for this machine
-npm run build:release     # Developer ID signed; set APPLE_SIGNING_IDENTITY first
+xcodebuild -project macos/ScribeX.xcodeproj -scheme ScribeX \
+  -configuration Debug -derivedDataPath macos/build/DerivedData build
+open macos/build/DerivedData/Build/Products/Debug/ScribeX.app
 ```
 
-Output lands in `src-tauri/target/release/bundle/` (`macos/ScribeX.app`, `dmg/`).
-The DMG step uses AppleScript to lay out the Finder window, which needs your
-terminal to have Automation permission for Finder. Without it the build fails
-with `error running bundle_dmg.sh` (the verbose log shows `Not authorised to
-send Apple events to Finder (-1743)`). Either allow it under System Settings →
-Privacy & Security → Automation, or build with `CI=true npm run tauri build`,
-which skips the layout step and uses Finder's default window.
+The first build compiles Tectonic's vendored C and takes several minutes.
 
-Tectonic links ICU, FreeType, Graphite2 and libpng from Homebrew. The build
-ships them inside the app, and nothing in it assumes a Homebrew location or a
-library version:
+**The first run needs the network once.** On a cold cache even `\maketitle`
+fails offline, because its display-size font isn't cached. Click **Download
+now** when the app offers it. [docs/OFFLINE.md](docs/OFFLINE.md) has the
+details.
 
-- `npm run tauri …` first runs `src-tauri/scripts/stage-dylibs.sh`. It asks
-  pkg-config where the libraries are, follows their dependencies, and copies
-  them into `src-tauri/frameworks/` with `@rpath` install names. It then writes
-  `src-tauri/tauri.macos.conf.json` (gitignored), which Tauri merges into
-  `tauri.conf.json` on macOS. That file lists the libraries and sets
-  `minimumSystemVersion` to the highest macOS version they were built for.
-- `src-tauri/scripts/relink-binary.sh`, run as `beforeBundleCommand`, points
-  the binary at the bundled copies. It fails the build if the binary still
-  links a non-system library that wasn't bundled.
+### What the build does with the engine
 
-Run Tauri through `npm run tauri`, not `npx tauri` or the global CLI, so the
-staging step runs. The minimum macOS version follows the machine that builds:
-current Homebrew targets its own macOS release, which is macOS 26 here. The
-ad-hoc build turns off the hardened
-runtime: its library validation rejects ad-hoc signed libraries. The release
-config turns it back on, which notarization requires.
+The "Embed Typesetting Engine" build phase (`macos/scripts/embed-engine.sh`):
 
-Third-party licenses ship in `Contents/Resources/licenses/`; see
-[THIRD-PARTY-NOTICES.md](src-tauri/licenses/THIRD-PARTY-NOTICES.md). Portions
-of this software are copyright © 2026 The FreeType Project
-(https://freetype.org). All rights reserved.
+1. Builds the `scribex-typeset` worker with cargo and copies it into
+   `Contents/MacOS`, beside the app's own executable.
+2. Copies ICU, FreeType, Graphite2 and libpng, which Tectonic links from
+   Homebrew, into `Contents/Frameworks` with `@rpath` install names
+   (`macos/scripts/stage-dylibs.sh`), and points the worker at those copies. It
+   fails the build if the worker still links a library that wasn't bundled.
+3. Copies the third-party licences from `macos/licenses/` into
+   `Contents/Resources/licenses`.
+4. Signs the worker and libraries with the app's identity.
+
+It finds Homebrew and sets `PKG_CONFIG_PATH` itself, and runs cargo in a clean
+environment so Xcode's build settings don't invalidate cargo's cache. Nothing
+in it assumes a Homebrew location or a library version. The minimum macOS
+version follows the machine that builds: current Homebrew targets its own
+macOS release, which is macOS 26 here.
+
+Debug builds are ad-hoc signed and run on this machine only. Release builds
+turn on the hardened runtime, which notarization needs; with ad-hoc signing
+the worker is left without it, because its library validation rejects ad-hoc
+signed libraries.
+
+The app is built for Apple Silicon only: the worker and the Homebrew libraries
+are built for the machine that builds them, so the app target is pinned to
+arm64 to match.
+
+## Distributing
+
+`macos/scripts/make-dmg.sh` builds a Release app and packages it as
+`macos/build/dist/ScribeX-<version>.dmg`.
+
+### Without an Apple Developer account
+
+Run it with no settings. The app is signed ad hoc, which is enough to share:
+the first time someone opens it, macOS blocks it ("Apple could not verify
+'ScribeX' is free of malware"). They allow it once under System Settings →
+Privacy & Security → Open Anyway, and it opens normally from then on. On
+macOS 15 and later right-click → Open no longer offers this. Alternatively:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/ScribeX.app
+```
+
+### With an Apple Developer account
+
+Signing with a Developer ID and notarizing removes that step. It needs a paid
+Apple Developer account, set up once:
+
+1. Create a **Developer ID Application** certificate: Xcode → Settings →
+   Accounts → Manage Certificates → + → Developer ID Application.
+   `security find-identity -v -p codesigning` then lists its full name.
+2. Store notarization credentials in the keychain, using an app-specific
+   password from account.apple.com:
+
+   ```sh
+   xcrun notarytool store-credentials scribex --apple-id you@example.com --team-id TEAMID
+   ```
+
+Then:
+
+```sh
+SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+NOTARY_PROFILE=scribex macos/scripts/make-dmg.sh
+```
+
+This signs the app, its worker and libraries with the Developer ID and a
+secure timestamp, notarizes and staples the app, then packages, signs,
+notarizes and staples the DMG. Stapling the app as well means it passes
+Gatekeeper after being copied out of the DMG, even offline. Each notarization
+round usually takes a few minutes.
+
+Raise the version (`MARKETING_VERSION`) and the build number
+(`CURRENT_PROJECT_VERSION`) in the Xcode target before each release, and check
+the STTextView licence under Licences below.
+
+## Testing
+
+```sh
+cargo test -p scribex-engine               # the engine, including the worker binary
+cargo build -p scribex-engine              # the worker the Swift integration tests run
+cd macos/ScribeXKit && swift test          # everything but the app shell
+```
+
+Tests that typeset need a primed Tectonic cache, since they build offline;
+without one they report that they were skipped.
+
+Debug builds can drive themselves and render their window to PNGs, which needs
+no Screen Recording permission; see `DebugScript.swift`.
 
 ## Layout
 
 | Path | Role |
 |---|---|
-| `src-tauri/src/engine.rs` | Tectonic driver. Worker process only — see below |
-| `src-tauri/src/worker.rs` | Runs each build in a child process, JSON over stdio |
-| `src-tauri/src/lib.rs` | Tauri commands: compile, save, export, cache warmup, offline toggle |
-| `src/App.tsx` | App state, builds, file handling, shortcuts |
-| `src/Editor.tsx` | CodeMirror 6 setup, LaTeX mode, completion |
-| `src/PdfView.tsx` | PDF.js renderer; keeps scroll position across rebuilds |
-| `src/texlog.ts` | Parses the TeX log into diagnostics and the build log |
-| `src/latex.ts` | LaTeX mode, completions, outline, document counts |
-| `src/Welcome.tsx` | Welcome screen: recent documents and templates |
-| `src/Palette.tsx` | ⌘K palette UI |
-| `src/commands.ts` | Plain-English → LaTeX snippet matcher (local keyword scoring) |
-| `src/Marks.tsx` | Diagnostics panel and build log |
-| `src/ExportSheet.tsx` | Export dialog |
-| `src/exporting.ts` | Source rewrites for export options |
-| `src/theme.css` | Design tokens |
+| `engine/src/engine.rs` | Tectonic driver. Worker process only — see below |
+| `engine/src/worker.rs` | The worker protocol: one JSON request in, one response out |
+| `engine/src/bin/scribex-typeset.rs` | The worker binary the app launches for each build |
+| `macos/ScribeX/` | The app target: entry point and icon |
+| `macos/ScribeXKit/Sources/ScribeXCore/Typesetter.swift` | Runs builds in the worker, one at a time; first-run download |
+| `macos/ScribeXKit/Sources/ScribeXCore/DocumentFiles.swift` | Save and export, the only writes to the user's files |
+| `macos/ScribeXKit/Sources/ScribeXCore/TexLog.swift` | Parses the TeX log into issues and the press log |
+| `macos/ScribeXKit/Sources/ScribeXCore/Latex.swift` | Outline, document counts, bibliography keys |
+| `macos/ScribeXKit/Sources/ScribeXCore/Snippets.swift` | Plain-English → LaTeX snippet matcher |
+| `macos/ScribeXKit/Sources/ScribeXUI/AppModel.swift` | App state, builds, file handling, autosave |
+| `macos/ScribeXKit/Sources/ScribeXUI/AppShell.swift` | The window, the unsaved-changes guard, the menu bar |
+| `macos/ScribeXKit/Sources/ScribeXUI/SourceEditor.swift` | STTextView setup, LaTeX colouring, brackets, completion |
+| `macos/ScribeXKit/Sources/ScribeXUI/PreviewView.swift` | PDFKit preview; keeps scroll position across rebuilds |
+| `macos/ScribeXKit/Sources/ScribeXUI/Theme.swift` | Design tokens, fonts and controls |
+| `macos/licenses/` | Third-party licences, shipped inside the app |
+
+## Licences
+
+Third-party licences ship in `Contents/Resources/licenses/`; see
+[THIRD-PARTY-NOTICES.md](macos/licenses/THIRD-PARTY-NOTICES.md). Portions of
+this software are copyright © 2026 The FreeType Project
+(https://freetype.org). All rights reserved.
+
+The editor, STTextView, is available under the GPL v3 or a commercial
+licence. Distributing ScribeX as closed source needs the commercial one.
 
 ## Before changing anything
 
 1. **Typesetting must stay in the worker process.** A failed run leaves
    Tectonic's C globals dirty, and the next run in the same process aborts
-   through a panic that can't unwind. Run in the GUI process, that takes down
-   the whole app.
+   through a panic that can't unwind. Run in the app's process, that takes
+   down the whole app.
 2. **`tectonic` is pinned to a git commit, not crates.io.** The published 0.15.0
    doesn't compile against its own published sibling crates.
 

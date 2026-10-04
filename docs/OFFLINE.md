@@ -47,10 +47,10 @@ question — see "Next" below.
 On an empty cache nothing builds at all, not even `hello world`: the engine
 fails with `failed to open input file "tectonic-format-latex.tex"` before any
 package is read, so there is no missing file for the banner to offer. The app
-treats that failure as "not set up yet" (`isColdCache` in `App.tsx`) and asks
+treats that failure as "not set up yet" (`BuildError.isColdCache`) and asks
 for a one-time download instead of reporting a build error.
 
-The download (`warmup_cache`) builds `WARMUP` and then each plate with the
+The download (`Typesetter.warmUp`) builds `WARMUP` and then each plate with the
 network allowed, so every document the app offers works offline afterwards.
 On success it writes a `cache-ready` marker in the app data directory; the
 start screen offers the download for as long as that marker is absent. It is
@@ -67,15 +67,16 @@ Measured from an empty cache (September 2026):
 | **Total** | **~443 (45 MB)** | **~105 s** |
 
 Downloads are strictly sequential inside Tectonic, which is why this is slow.
-Progress comes from the `fetching` event sent for each downloaded file (see `worker.rs`); `SETUP_FILES` in
-`Setup.tsx` is the expected total and only paces the bar.
+Progress comes from the line the worker writes to stderr for each downloaded
+file (see `worker.rs`); `SetupView.expectedFiles` is the expected total and
+only paces the bar.
 
 To reproduce a first launch without touching the real cache, point
 `TECTONIC_CACHE_DIR` at an empty directory and delete the `cache-ready` marker.
 
 ## Why typesetting runs in a subprocess
 
-`engine.rs` must only be called from the worker process (`scribex --typeset`).
+`engine.rs` must only be called from the worker process, `scribex-typeset`.
 Tectonic's C engines keep global state. After a *failed* xdvipdfmx run, the
 cleanup path (`pdf_obj_reset_global_state`) closes an output handle that no
 longer exists, and the next run in that process panics here:
@@ -90,17 +91,18 @@ it **aborts the process**. Linking the engine into the GUI directly means one
 bad document takes the whole editor down with it — observed, not theorised.
 
 Upstream's CLI never trips over this because it runs one process per document.
-`worker.rs` does the same: the GUI re-executes its own binary with `--typeset`
-and speaks JSON over stdio. Re-exec rather than a separate sidecar binary means
-nothing extra to bundle, sign, or notarize. Spawn overhead is a few ms against a
-~700 ms compile, and each run starts from clean engine state.
+ScribeX does the same, and speaks JSON over stdio to the worker (the protocol
+is in `worker.rs`). The app launches the `scribex-typeset` binary, which ships
+in `Contents/MacOS` beside the app's own executable; `Typesetter.swift` is its
+side of the protocol. Spawn overhead is a few ms against a ~700 ms compile,
+and each run starts from clean engine state.
 
-If a worker dies without writing a response, `worker::run` reports it as an
-engine crash and the editor keeps running.
+If a worker dies without writing a response, the app reports it as an engine
+crash and the editor keeps running.
 
 ## Dependency pinning
 
-`Cargo.toml` pins `tectonic` to a git commit on `master`, not crates.io. The published
+`engine/Cargo.toml` pins `tectonic` to a git commit on `master`, not crates.io. The published
 0.15.0 does not compile against the currently published sibling crates:
 `tectonic_bundles` 0.4.2 changed the `Bundle` trait (`all_files` lost its
 `status` argument and gained a `Result`), producing 17 errors across
