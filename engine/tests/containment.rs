@@ -1,6 +1,6 @@
 //! A document must not be able to write outside its build directory.
 //!
-//! Runs the real worker (`scribex --typeset`) on a document that tries to
+//! Runs the real worker (`scribex-typeset`) on a document that tries to
 //! `\openout` through `../` and an absolute path. Needs a primed Tectonic cache,
 //! since the build runs offline; on a cold cache it reports that and passes.
 
@@ -29,8 +29,7 @@ fn openout_cannot_escape_the_build_dir() {
         "only_cached": true,
     });
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_scribex"))
-        .arg("--typeset")
+    let mut child = Command::new(env!("CARGO_BIN_EXE_scribex-typeset"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())

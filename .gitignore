@@ -23,6 +23,15 @@ dist-ssr
 *.sln
 *.sw?
 
+# Cargo workspace build output
+/target/
+
+# macOS app build output
+/macos/build/
+/macos/ScribeXKit/.build/
+/macos/ScribeXKit/.swiftpm/
+xcuserdata/
+
 # ScribeX build output
 .scribex-build/
 

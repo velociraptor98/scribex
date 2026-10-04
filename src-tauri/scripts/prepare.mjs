@@ -4,6 +4,6 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 if (process.platform === "darwin") {
-  const script = fileURLToPath(new URL("./stage-dylibs.sh", import.meta.url));
+  const script = fileURLToPath(new URL("./tauri-macos-conf.sh", import.meta.url));
   execFileSync("sh", [script], { stdio: "inherit" });
 }

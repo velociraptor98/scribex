@@ -1,15 +1,14 @@
 #!/bin/sh
-# Copy the non-system libraries Tectonic links against into frameworks/, with
-# @rpath install names, so the bundler can ship them inside the .app. Then
-# write tauri.macos.conf.json, which Tauri merges into tauri.conf.json on macOS,
-# listing them and the minimum macOS version they require.
+# Copy the non-system libraries Tectonic links against into the directory given
+# as $1, with @rpath install names, so they can ship inside an app bundle's
+# Contents/Frameworks. Used by both the macOS app (macos/scripts/embed-engine.sh)
+# and the Tauri app (src-tauri/scripts/prepare.mjs).
 #
 # Libraries are found through pkg-config, as Tectonic's own build finds them,
 # so nothing here depends on where Homebrew lives or on library versions.
 set -eu
 
-cd "$(dirname "$0")/.."
-out=frameworks
+out=${1:?usage: stage-dylibs.sh OUT_DIR}
 MODULES="icu-uc freetype2 graphite2 libpng16"
 
 is_system() {
@@ -68,7 +67,6 @@ while [ -n "$(echo $queue)" ]; do
     queue=$next
 done
 
-minos=0
 for lib in "$out"/*.dylib; do
     chmod u+w "$lib"
     install_name_tool -id "@rpath/$(basename "$lib")" "$lib" 2>/dev/null
@@ -79,23 +77,4 @@ for lib in "$out"/*.dylib; do
         fi
     done
     codesign --force --sign - "$lib" >/dev/null 2>&1
-    v=$(otool -l "$lib" | awk '/LC_BUILD_VERSION/{f=1} f&&/minos/{print $2; exit}')
-    minos=$(printf '%s\n%s\n' "$minos" "${v:-0}" | sort -t. -k1,1n -k2,2n | tail -n 1)
 done
-
-list=$(ls "$out" | sed "s|^|        \"$out/|; s|\$|\",|" | sed '$ s/,$//')
-conf=$(cat <<EOF
-{
-  "bundle": {
-    "macOS": {
-      "minimumSystemVersion": "$minos",
-      "frameworks": [
-$list
-      ]
-    }
-  }
-}
-EOF
-)
-# Rewrite only on change, so an unchanged config does not trigger a rebuild.
-[ "$(cat tauri.macos.conf.json 2>/dev/null)" = "$conf" ] || printf '%s\n' "$conf" > tauri.macos.conf.json

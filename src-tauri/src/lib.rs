@@ -1,5 +1,4 @@
-mod engine;
-mod worker;
+use scribex_engine::{engine, worker};
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};

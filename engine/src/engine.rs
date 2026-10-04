@@ -1,10 +1,11 @@
 //! Tectonic-backed typesetting. No TeX Live on disk; the engine is linked in.
 //!
 //! IMPORTANT: this module must only ever be called from the short-lived worker
-//! process (`scribex --typeset`), never from the GUI process. Tectonic's C
-//! engines keep global state, and a *failed* xdvipdfmx run leaves a stale output
-//! handle behind. The next call then panics inside `ttbc_output_close`, which is
-//! `extern "C"` and therefore cannot unwind — so it aborts the process outright.
+//! process (`scribex-typeset`, or `scribex --typeset` in the Tauri app), never
+//! from the GUI process. Tectonic's C engines keep global state, and a *failed*
+//! xdvipdfmx run leaves a stale output handle behind. The next call then panics
+//! inside `ttbc_output_close`, which is `extern "C"` and therefore cannot
+//! unwind — so it aborts the process outright.
 //! Upstream's CLI never trips over this because it runs one process per
 //! document; we do the same. See `worker.rs`.
 //!

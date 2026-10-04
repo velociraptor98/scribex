@@ -1,12 +1,13 @@
 //! Crash-isolated typesetting worker.
 //!
 //! The GUI never links a compile call directly (see the warning in `engine.rs`);
-//! it re-executes its own binary with `--typeset` and talks JSON over stdio. Two
-//! reasons: a Tectonic abort kills only the worker, and each run starts from
-//! clean engine global state.
+//! it starts a worker process per build and talks JSON over stdio. Two reasons:
+//! a Tectonic abort kills only the worker, and each run starts from clean engine
+//! global state.
 //!
-//! Re-exec beats a separate sidecar binary here because there is nothing extra
-//! to bundle, sign, or notarize — it is the same executable.
+//! The macOS app launches the `scribex-typeset` binary, which is `main` below,
+//! and implements `run`'s side of the protocol in Swift. The Tauri app
+//! re-executes its own binary with `--typeset` and uses `run`.
 
 use serde::{Deserialize, Serialize};
 use std::fmt::Arguments;

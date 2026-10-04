@@ -1,8 +1,13 @@
 # ScribeX
 
-An offline LaTeX editor. Tauri shell, CodeMirror 6 editor, PDF.js viewer, and
+An offline LaTeX editor for macOS, with
 [Tectonic](https://tectonic-typesetting.github.io/) as the typesetting engine.
 No TeX Live installation or server is needed.
+
+There are two front ends over one Rust engine (`engine/`): a native Swift app
+in `macos/` (SwiftUI, STTextView, PDFKit), and the original Tauri app (React,
+CodeMirror 6, PDF.js) in `src/` and `src-tauri/`. The Swift app is replacing
+the Tauri one; the Tauri app keeps building until the Swift app reaches parity.
 
 ## Features
 
@@ -22,7 +27,47 @@ from memory, so the file on disk changes only when you save. `\input` and
 
 Not built yet: SyncTeX, a project file tree, a bundled resource cache.
 
-## Running
+## The macOS app
+
+Requires Xcode 26 or later, Rust, and the C libraries Tectonic links against
+(the `brew install` line below). Then:
+
+```sh
+open macos/ScribeX.xcodeproj        # and run the ScribeX scheme
+# or
+xcodebuild -project macos/ScribeX.xcodeproj -scheme ScribeX build
+```
+
+The "Embed Typesetting Engine" build phase (`macos/scripts/embed-engine.sh`)
+builds the `scribex-typeset` worker with cargo, copies it into
+`Contents/MacOS`, stages the Homebrew libraries into `Contents/Frameworks`
+(`scripts/stage-dylibs.sh`) and signs both. It finds Homebrew and sets
+`PKG_CONFIG_PATH` itself, so nothing needs exporting first.
+
+Everything but the app shell is a Swift package, so it builds and tests from a
+terminal:
+
+```sh
+cargo build -p scribex-engine        # the worker the integration tests run
+cd macos/ScribeXKit && swift test
+```
+
+| Path | Role |
+|---|---|
+| `macos/ScribeXKit/Sources/ScribeXCore/Typesetter.swift` | Runs builds in the worker, one at a time; save and export |
+| `macos/ScribeXKit/Sources/ScribeXCore/TexLog.swift` | Parses the TeX log into issues and the press log |
+| `macos/ScribeXKit/Sources/ScribeXCore/Latex.swift` | Outline, document counts, bibliography keys |
+| `macos/ScribeXKit/Sources/ScribeXCore/Snippets.swift` | Plain-English → LaTeX snippet matcher |
+| `macos/ScribeXKit/Sources/ScribeXUI/AppModel.swift` | App state, builds, file handling, autosave |
+| `macos/ScribeXKit/Sources/ScribeXUI/AppShell.swift` | The window, the unsaved-changes guard, the menu bar |
+| `macos/ScribeXKit/Sources/ScribeXUI/SourceEditor.swift` | STTextView setup, LaTeX colouring, brackets, completion |
+| `macos/ScribeXKit/Sources/ScribeXUI/PreviewView.swift` | PDFKit preview; keeps scroll position across rebuilds |
+| `macos/ScribeXKit/Sources/ScribeXUI/Theme.swift` | Design tokens and fonts |
+
+Debug builds can drive themselves and render their window to PNGs, which needs
+no Screen Recording permission; see `DebugScript.swift`.
+
+## Running the Tauri app
 
 Requires Rust, Node, and the C libraries Tectonic links against:
 
@@ -46,7 +91,7 @@ fails offline, because its display-size font isn't cached. Click **Prime full
 cache** when the banner appears. [docs/OFFLINE.md](docs/OFFLINE.md) has the
 details.
 
-## Building the macOS app
+## Building the Tauri app
 
 With `PKG_CONFIG_PATH` set as above:
 
@@ -55,7 +100,7 @@ npm run tauri build       # ad-hoc signed, for this machine
 npm run build:release     # Developer ID signed; set APPLE_SIGNING_IDENTITY first
 ```
 
-Output lands in `src-tauri/target/release/bundle/` (`macos/ScribeX.app`, `dmg/`).
+Output lands in `target/release/bundle/` (`macos/ScribeX.app`, `dmg/`).
 The DMG step uses AppleScript to lay out the Finder window, which needs your
 terminal to have Automation permission for Finder. Without it the build fails
 with `error running bundle_dmg.sh` (the verbose log shows `Not authorised to
@@ -67,9 +112,10 @@ Tectonic links ICU, FreeType, Graphite2 and libpng from Homebrew. The build
 ships them inside the app, and nothing in it assumes a Homebrew location or a
 library version:
 
-- `npm run tauri …` first runs `src-tauri/scripts/stage-dylibs.sh`. It asks
+- `npm run tauri …` first runs `src-tauri/scripts/tauri-macos-conf.sh`, which
+  runs `scripts/stage-dylibs.sh`. It asks
   pkg-config where the libraries are, follows their dependencies, and copies
-  them into `src-tauri/frameworks/` with `@rpath` install names. It then writes
+  them into `src-tauri/frameworks/` with `@rpath` install names. The wrapper then writes
   `src-tauri/tauri.macos.conf.json` (gitignored), which Tauri merges into
   `tauri.conf.json` on macOS. That file lists the libraries and sets
   `minimumSystemVersion` to the highest macOS version they were built for.
@@ -93,8 +139,9 @@ of this software are copyright © 2026 The FreeType Project
 
 | Path | Role |
 |---|---|
-| `src-tauri/src/engine.rs` | Tectonic driver. Worker process only — see below |
-| `src-tauri/src/worker.rs` | Runs each build in a child process, JSON over stdio |
+| `engine/src/engine.rs` | Tectonic driver. Worker process only — see below |
+| `engine/src/worker.rs` | Runs each build in a child process, JSON over stdio |
+| `engine/src/bin/scribex-typeset.rs` | The worker as its own binary, for the macOS app |
 | `src-tauri/src/lib.rs` | Tauri commands: compile, save, export, cache warmup, offline toggle |
 | `src/App.tsx` | App state, builds, file handling, shortcuts |
 | `src/Editor.tsx` | CodeMirror 6 setup, LaTeX mode, completion |

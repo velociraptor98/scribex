@@ -7,7 +7,8 @@ set -eu
 
 cd "$(dirname "$0")/.."
 
-for bin in target/release/scribex target/debug/scribex target/*/release/scribex target/*/debug/scribex; do
+# The Cargo workspace root, one level up, owns the target directory.
+for bin in ../target/release/scribex ../target/debug/scribex ../target/*/release/scribex ../target/*/debug/scribex; do
     [ -f "$bin" ] || continue
     otool -L "$bin" | tail -n +2 | awk '{print $1}' | while read -r dep; do
         name=$(basename "$dep")
