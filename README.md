@@ -69,8 +69,46 @@ macOS release, which is macOS 26 here.
 Debug builds are ad-hoc signed and run on this machine only. Release builds
 turn on the hardened runtime, which notarization needs; with ad-hoc signing
 the worker is left without it, because its library validation rejects ad-hoc
-signed libraries. Developer ID signing, notarization and a DMG are not set up
-yet.
+signed libraries.
+
+The app is built for Apple Silicon only: the worker and the Homebrew libraries
+are built for the machine that builds them, so the app target is pinned to
+arm64 to match.
+
+## Distributing
+
+`macos/scripts/make-dmg.sh` builds a Release app and packages it as
+`macos/build/dist/ScribeX-<version>.dmg`. Run without settings, it signs ad
+hoc: the DMG works on this Mac and Gatekeeper refuses it on others.
+
+A DMG other Macs will open needs a paid Apple Developer account, set up once:
+
+1. Create a **Developer ID Application** certificate: Xcode → Settings →
+   Accounts → Manage Certificates → + → Developer ID Application.
+   `security find-identity -v -p codesigning` then lists its full name.
+2. Store notarization credentials in the keychain, using an app-specific
+   password from account.apple.com:
+
+   ```sh
+   xcrun notarytool store-credentials scribex --apple-id you@example.com --team-id TEAMID
+   ```
+
+Then:
+
+```sh
+SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+NOTARY_PROFILE=scribex macos/scripts/make-dmg.sh
+```
+
+This signs the app, its worker and libraries with the Developer ID and a
+secure timestamp, notarizes and staples the app, then packages, signs,
+notarizes and staples the DMG. Stapling the app as well means it passes
+Gatekeeper after being copied out of the DMG, even offline. Each notarization
+round usually takes a few minutes.
+
+Raise the version (`MARKETING_VERSION`) and the build number
+(`CURRENT_PROJECT_VERSION`) in the Xcode target before each release, and check
+the STTextView licence under Licences below.
 
 ## Testing
 
