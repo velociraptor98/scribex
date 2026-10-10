@@ -22,11 +22,16 @@ struct EditorScreen: View {
                     ProgressView().controlSize(.small)
                     Text("Downloading \(last)").font(Fonts.text(11.5)).foregroundStyle(.secondary)
                 }
-                Toggle(isOn: Binding(get: { model.offline }, set: { _ in model.toggleOffline() })) {
+                // A button, not a toggle: a toolbar toggle that is on draws as a
+                // white disc, and offline is the normal state.
+                Button(action: model.toggleOffline) {
                     Label(model.offline ? "Offline" : "Network", systemImage: model.offline ? "wifi.slash" : "wifi")
+                        .labelStyle(.titleAndIcon)
                 }
                 .help(model.offline ? "The engine refuses all network access" : "The engine may fetch missing resources")
             }
+            // Status rather than an action, so no glass capsule behind it.
+            .sharedBackgroundVisibility(.hidden)
         }
     }
 

@@ -15,6 +15,16 @@ public struct Suggestion: Hashable, Sendable, Identifiable {
     /// from the selection itself.
     public var text: String
     public var score: Double
+
+    /// What an intent builds; `suggest` fills in the id and the score.
+    init(title: String, preview: String? = nil, text: String, hint: String? = nil) {
+        id = ""
+        self.title = title
+        self.preview = preview
+        self.hint = hint
+        self.text = text
+        score = 0
+    }
 }
 
 private struct Query: Sendable {
@@ -29,13 +39,6 @@ private struct Query: Sendable {
 
 private func clamp(_ n: Int, _ lo: Int, _ hi: Int) -> Int { min(hi, max(lo, n)) }
 
-private struct Built: Sendable {
-    var title: String
-    var preview: String?
-    var text: String
-    var hint: String?
-}
-
 private struct Intent: Sendable {
     var id: String
     /// Matched loosely, by prefix in either direction.
@@ -43,7 +46,7 @@ private struct Intent: Sendable {
     /// Breaks ties toward the plainer reading: "a table" matches both `table`
     /// and `booktabs` equally. Too small to overturn a better keyword match.
     var bias: Double = 0
-    var build: @Sendable (Query) -> Built
+    var build: @Sendable (Query) -> Suggestion
 }
 
 private func tabular(_ c: Int, _ r: Int, booktabs: Bool) -> String {
@@ -62,33 +65,33 @@ private func s(_ n: Int) -> String { n > 1 ? "s" : "" }
 private let intents: [Intent] = [
     Intent(id: "table", words: ["table", "tabular", "grid", "rows", "columns", "cells", "spreadsheet", "matrix of"], bias: 0.03) { q in
         let c = q.cols, r = q.rows
-        return Built(
+        return Suggestion(
             title: "Insert a table — \(c) column\(s(c)) × \(r) row\(s(r))",
             preview: "\\begin{tabular}{\(String(repeating: "l", count: c))} … \\end{tabular}",
             text: tabular(c, r, booktabs: false)
         )
     },
     Intent(id: "booktabs", words: ["booktabs", "ruled", "professional", "toprule", "midrule", "table", "no verticals"]) { q in
-        Built(
+        Suggestion(
             title: "Insert a booktabs table (ruled, no verticals)",
             preview: "\\usepackage{booktabs} · \\toprule … \\bottomrule",
             text: tabular(q.cols, q.rows, booktabs: true)
         )
     },
     Intent(id: "caption", words: ["caption", "label", "title", "number", "reference", "cross"]) { _ in
-        Built(title: "Add a caption and a label", preview: "\\caption{…} \\label{tab:…}", text: "\\caption{\(caret)}\n\\label{tab:key}")
+        Suggestion(title: "Add a caption and a label", preview: "\\caption{…} \\label{tab:…}", text: "\\caption{\(caret)}\n\\label{tab:key}")
     },
     Intent(id: "twocolumn", words: ["two", "column", "columns", "twocolumn", "double", "page", "layout"]) { _ in
-        Built(title: "Set the page in two columns", preview: "\\documentclass[twocolumn]{…} · \\twocolumn", text: "\\twocolumn\(caret)")
+        Suggestion(title: "Set the page in two columns", preview: "\\documentclass[twocolumn]{…} · \\twocolumn", text: "\\twocolumn\(caret)")
     },
     Intent(id: "equation", words: ["equation", "maths", "math", "formula", "numbered", "display", "expression"]) { _ in
-        Built(title: "Insert a numbered equation", preview: "\\begin{equation} … \\end{equation}", text: "\\begin{equation}\n  \(caret)\n\\end{equation}")
+        Suggestion(title: "Insert a numbered equation", preview: "\\begin{equation} … \\end{equation}", text: "\\begin{equation}\n  \(caret)\n\\end{equation}")
     },
     Intent(id: "align", words: ["align", "aligned", "multiline", "several", "lines", "equations", "system"]) { _ in
-        Built(title: "Insert aligned equations", preview: "\\begin{align} … \\end{align}", text: "\\begin{align}\n  \(caret) &= \\\\\n   &=\n\\end{align}")
+        Suggestion(title: "Insert aligned equations", preview: "\\begin{align} … \\end{align}", text: "\\begin{align}\n  \(caret) &= \\\\\n   &=\n\\end{align}")
     },
     Intent(id: "figure", words: ["figure", "image", "picture", "graphic", "photo", "diagram", "includegraphics", "plot"]) { _ in
-        Built(
+        Suggestion(
             title: "Insert a figure with a caption",
             preview: "\\begin{figure} \\includegraphics … \\end{figure}",
             text: [
@@ -102,68 +105,68 @@ private let intents: [Intent] = [
         )
     },
     Intent(id: "itemize", words: ["bullet", "bullets", "list", "itemize", "unordered", "points", "dot"]) { _ in
-        Built(title: "Insert a bulleted list", preview: "\\begin{itemize} \\item … \\end{itemize}", text: "\\begin{itemize}\n  \\item \(caret)\n  \\item\n\\end{itemize}")
+        Suggestion(title: "Insert a bulleted list", preview: "\\begin{itemize} \\item … \\end{itemize}", text: "\\begin{itemize}\n  \\item \(caret)\n  \\item\n\\end{itemize}")
     },
     Intent(id: "enumerate", words: ["numbered", "list", "enumerate", "ordered", "steps", "count"]) { _ in
-        Built(title: "Insert a numbered list", preview: "\\begin{enumerate} \\item … \\end{enumerate}", text: "\\begin{enumerate}\n  \\item \(caret)\n  \\item\n\\end{enumerate}")
+        Suggestion(title: "Insert a numbered list", preview: "\\begin{enumerate} \\item … \\end{enumerate}", text: "\\begin{enumerate}\n  \\item \(caret)\n  \\item\n\\end{enumerate}")
     },
     Intent(id: "section", words: ["section", "heading", "header", "chapter", "part", "title"]) { _ in
-        Built(title: "Start a new section", preview: "\\section{…}", text: "\\section{\(caret)}")
+        Suggestion(title: "Start a new section", preview: "\\section{…}", text: "\\section{\(caret)}")
     },
     Intent(id: "cite", words: ["cite", "citation", "reference", "bibliography", "source", "paper", "bibtex"]) { _ in
-        Built(title: "Cite a work", preview: "\\cite{key}", text: "\\cite{\(caret)}")
+        Suggestion(title: "Cite a work", preview: "\\cite{key}", text: "\\cite{\(caret)}")
     },
     Intent(id: "ref", words: ["ref", "reference", "refer", "cross", "link", "point", "equation", "figure"]) { _ in
-        Built(title: "Refer to a label", preview: "\\ref{key}", text: "\\ref{\(caret)}")
+        Suggestion(title: "Refer to a label", preview: "\\ref{key}", text: "\\ref{\(caret)}")
     },
     Intent(id: "footnote", words: ["footnote", "note", "aside", "remark", "bottom"]) { _ in
-        Built(title: "Add a footnote", preview: "\\footnote{…}", text: "\\footnote{\(caret)}")
+        Suggestion(title: "Add a footnote", preview: "\\footnote{…}", text: "\\footnote{\(caret)}")
     },
     Intent(id: "matrix", words: ["matrix", "matrices", "array", "bracket", "pmatrix", "determinant"]) { q in
         let c = q.cols, r = q.rows
         let body = (0..<r).map { _ in Array(repeating: "0", count: c).joined(separator: " & ") }
             .joined(separator: " \\\\\n  ")
-        return Built(
+        return Suggestion(
             title: "Insert a \(c) × \(r) matrix",
             preview: "\\begin{pmatrix} … \\end{pmatrix}",
             text: "\\begin{pmatrix}\n  \(body)\n\\end{pmatrix}\(caret)"
         )
     },
     Intent(id: "verbatim", words: ["code", "verbatim", "listing", "monospace", "program", "snippet"]) { _ in
-        Built(title: "Insert a code block", preview: "\\begin{verbatim} … \\end{verbatim}", text: "\\begin{verbatim}\n\(caret)\n\\end{verbatim}")
+        Suggestion(title: "Insert a code block", preview: "\\begin{verbatim} … \\end{verbatim}", text: "\\begin{verbatim}\n\(caret)\n\\end{verbatim}")
     },
     Intent(id: "quote", words: ["quote", "quotation", "block", "excerpt", "indent"]) { _ in
-        Built(title: "Insert a block quotation", preview: "\\begin{quote} … \\end{quote}", text: "\\begin{quote}\n  \(caret)\n\\end{quote}")
+        Suggestion(title: "Insert a block quotation", preview: "\\begin{quote} … \\end{quote}", text: "\\begin{quote}\n  \(caret)\n\\end{quote}")
     },
     Intent(id: "bold", words: ["bold", "strong", "heavy", "textbf", "emphasis"]) { q in
-        Built(
+        Suggestion(
             title: q.hasSelection ? "Set the selection in bold" : "Set text in bold",
             preview: "\\textbf{…}", text: "\\textbf{\(caret)}", hint: "⌘B"
         )
     },
     Intent(id: "italic", words: ["italic", "italics", "emphasise", "emphasize", "emph", "slanted"]) { q in
-        Built(
+        Suggestion(
             title: q.hasSelection ? "Set the selection in italics" : "Set text in italics",
             preview: "\\emph{…}", text: "\\emph{\(caret)}", hint: "⌘I"
         )
     },
     Intent(id: "toc", words: ["contents", "toc", "tableofcontents", "outline", "index"]) { _ in
-        Built(title: "Insert a table of contents", preview: "\\tableofcontents", text: "\\tableofcontents\(caret)")
+        Suggestion(title: "Insert a table of contents", preview: "\\tableofcontents", text: "\\tableofcontents\(caret)")
     },
     Intent(id: "abstract", words: ["abstract", "summary", "synopsis"]) { _ in
-        Built(title: "Insert an abstract", preview: "\\begin{abstract} … \\end{abstract}", text: "\\begin{abstract}\n  \(caret)\n\\end{abstract}")
+        Suggestion(title: "Insert an abstract", preview: "\\begin{abstract} … \\end{abstract}", text: "\\begin{abstract}\n  \(caret)\n\\end{abstract}")
     },
     Intent(id: "package", words: ["package", "usepackage", "import", "library", "load"]) { _ in
-        Built(title: "Load a package", preview: "\\usepackage{…}", text: "\\usepackage{\(caret)}")
+        Suggestion(title: "Load a package", preview: "\\usepackage{…}", text: "\\usepackage{\(caret)}")
     },
     Intent(id: "pagebreak", words: ["page", "break", "newpage", "clearpage", "next"]) { _ in
-        Built(title: "Break to a new page", preview: "\\newpage", text: "\\newpage\(caret)")
+        Suggestion(title: "Break to a new page", preview: "\\newpage", text: "\\newpage\(caret)")
     },
 ]
 
 private let wrappers: [Intent] = [
     Intent(id: "wrap-table", words: ["table", "turn", "convert", "selection", "into", "make"]) { _ in
-        Built(title: "Turn the selection into a table", preview: "rows of tab- or comma-separated text → tabular", text: "")
+        Suggestion(title: "Turn the selection into a table", preview: "rows of tab- or comma-separated text → tabular", text: "")
     },
 ]
 
@@ -213,11 +216,10 @@ public func suggest(_ text: String, hasSelection: Bool = false, limit: Int = 6) 
     for intent in pool {
         let sc = score(intent, words)
         if sc <= 0 { continue }
-        let built = intent.build(q)
-        out.append(Suggestion(
-            id: intent.id, title: built.title, preview: built.preview, hint: built.hint,
-            text: built.text, score: sc + intent.bias
-        ))
+        var suggestion = intent.build(q)
+        suggestion.id = intent.id
+        suggestion.score = sc + intent.bias
+        out.append(suggestion)
     }
 
     out.sort { a, b in
