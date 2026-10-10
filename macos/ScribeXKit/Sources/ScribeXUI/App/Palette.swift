@@ -103,9 +103,7 @@ struct Palette: View {
         }
         .frame(width: 600)
         .scribeStyle()
-        // Focus and selection are set up front rather than in onAppear: a state
-        // change there leaves the list an update to apply while the window is
-        // first shown, which SwiftUI's List can't take (it traps in the canvas).
+        // The field starts focused and the first row selected (see init).
         .defaultFocus($focused, true)
         .onChange(of: query) { active = PaletteRow.rows(for: query, commands: commands, hasSelection: !model.editor.selectedText.isEmpty).first?.id }
         .onExitCommand(perform: close)
