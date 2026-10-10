@@ -60,11 +60,7 @@ private struct Entry: Decodable, Sendable {
     var needsSelection: Bool?
 }
 
-/// Bundled with the app, so a file that fails to load is a build mistake.
-private let entries: [Entry] = {
-    let url = Bundle.module.url(forResource: "snippets", withExtension: "json", subdirectory: "Resources")!
-    return try! JSONDecoder().decode([Entry].self, from: Data(contentsOf: url))
-}()
+private let entries: [Entry] = bundled("snippets.json")
 
 private func tabular(_ c: Int, _ r: Int, booktabs: Bool) -> String {
     let spec = String(repeating: "l", count: c)

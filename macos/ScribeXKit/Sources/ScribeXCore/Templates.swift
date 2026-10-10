@@ -11,14 +11,12 @@ public struct Template: Hashable, Sendable, Identifiable {
     public var id: String { name }
 }
 
-/// Bundled with the app, so files that fail to load are a build mistake.
 public let templates: [Template] = {
     struct Entry: Decodable { var name, note, file: String }
-    let folder = Bundle.module.url(forResource: "Templates", withExtension: nil, subdirectory: "Resources")!
-    let entries = try! JSONDecoder().decode([Entry].self, from: Data(contentsOf: folder.appending(path: "templates.json")))
+    let entries: [Entry] = bundled("Templates/templates.json")
     return entries.map { entry in
         Template(name: entry.name, note: entry.note,
-              source: try! String(contentsOf: folder.appending(path: entry.file), encoding: .utf8))
+                 source: try! String(contentsOf: bundledURL("Templates/" + entry.file), encoding: .utf8))
     }
 }()
 
