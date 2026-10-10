@@ -15,10 +15,10 @@ enum DocumentSheet: Identifiable {
 }
 
 /// One document window: contents · source · preview side by side, with the
-/// issues panel beneath the preview. `DocumentGroup` makes one per open
+/// issues accordion beneath the preview. `DocumentGroup` makes one per open
 /// document and supplies the title, proxy icon, edited dot and save prompts.
 ///
-/// Every part but the source can be closed, and the splits resize them. The
+/// Contents and preview can be closed, the issues folded, and the splits resize them. The
 /// window's own state (panels, zoom, the open sheet) lives here, the nearest
 /// view its parts share, and reaches the menu bar through focus.
 public struct DocumentView: View {
@@ -50,9 +50,12 @@ public struct DocumentView: View {
                         if panels.preview {
                             Renderer(model: session, zoom: $zoom) { sheet = .export }.frame(minHeight: 240)
                         }
-                        if panels.issues {
-                            Issues(model: session, isOpen: $panels.issues).frame(minHeight: 100, idealHeight: 220)
-                        }
+                        // Always there as a header. Expanded, it opens at its minimum
+                        // (the split ignores the ideal), so that is set to fit an issue.
+                        Issues(model: session, isExpanded: $panels.issues)
+                            .frame(minHeight: panels.issues ? 220 : Issues.headerHeight,
+                                   idealHeight: panels.issues ? 220 : Issues.headerHeight,
+                                   maxHeight: panels.issues ? .infinity : Issues.headerHeight)
                     }
                     .frame(minWidth: 320, idealWidth: 560)
                 }

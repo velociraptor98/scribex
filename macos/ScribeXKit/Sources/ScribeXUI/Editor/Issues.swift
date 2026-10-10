@@ -1,26 +1,40 @@
 import ScribeXCore
 import SwiftUI
 
-/// The panel under the preview: what TeX complained about, in
-/// plain words, with fixes.
+/// An accordion under the preview: one line with the count, opening into
+/// what TeX complained about, in plain words, with fixes.
 struct Issues: View {
+    static let headerHeight: CGFloat = 34
+
     let model: Session
-    @Binding var isOpen: Bool
+    @Binding var isExpanded: Bool
 
     var body: some View {
         let diags = model.visible
         VStack(spacing: 0) {
-            HStack {
-                Text(diags.isEmpty ? "Issues" : "Issues · \(diags.count)").smallCaps()
-                Spacer()
-                Button("Close", systemImage: "xmark") { isOpen = false }
-                    .buttonStyle(.borderless)
-                    .labelStyle(.iconOnly)
-                    .help("Hide the issues (⇧⌘M)")
+            Button { isExpanded.toggle() } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    Text(summary(diags)).smallCaps()
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .frame(height: Self.headerHeight)
+                .contentShape(.rect)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            list(diags)
+            .buttonStyle(.plain)
+            .help(isExpanded ? "Hide the issues (⇧⌘M)" : "Show the issues (⇧⌘M)")
+            if isExpanded { list(diags) }
+        }
+    }
+
+    private func summary(_ diags: [Diagnostic]) -> String {
+        switch diags.count {
+        case 0: "No issues"
+        case 1: "1 issue"
+        case let n: "\(n) issues"
         }
     }
 
@@ -92,5 +106,5 @@ private struct IssueRow: View {
         raw: "Undefined control sequence.", line: 12,
         fixes: [Fix(label: "Use \\emph", line: 12, find: "\\emhp", replace: "\\emph")]
     )
-    Issues(model: .preview(issues: [issue]), isOpen: .constant(true)).scribeStyle().frame(width: 900, height: 260)
+    Issues(model: .preview(issues: [issue]), isExpanded: .constant(true)).scribeStyle().frame(width: 900, height: 260)
 }
