@@ -2,37 +2,6 @@ import AppKit
 import ScribeXCore
 import SwiftUI
 
-struct AppCommand: Identifiable {
-    let id: String
-    let title: String
-    var hint: String?
-    var words: [String] = []
-    var disabled = false
-    let run: () -> Void
-}
-
-extension Session {
-    var commands: [AppCommand] {
-        [
-            // File commands go to the document system, as the menu items do.
-            AppCommand(id: "save", title: "Save", hint: "⌘S", words: ["write", "disk"]) { NSApp.sendAction(#selector(NSDocument.save(_:)), to: nil, from: nil) },
-            AppCommand(id: "saveas", title: "Save as…", hint: "⇧⌘S", words: ["copy", "rename"]) { NSApp.sendAction(#selector(NSDocument.saveAs(_:)), to: nil, from: nil) },
-            AppCommand(id: "export", title: "Export as PDF…", hint: "⌘E", words: ["pdf", "save", "print"], disabled: preview == nil) { [unowned self] in exportOpen = true },
-            AppCommand(id: "open", title: "Open…", hint: "⌘O", words: ["file", "document"], disabled: engine.locked) { NSDocumentController.shared.openDocument(nil) },
-            AppCommand(id: "new", title: "New document", hint: "⌘N", words: ["blank", "start"], disabled: engine.locked) { NSDocumentController.shared.newDocument(nil) },
-            AppCommand(id: "build", title: "Build now", hint: "⌘R", words: ["set", "compile", "typeset", "rebuild"], disabled: busy) { [unowned self] in build() },
-            AppCommand(id: "live", title: autoBuild ? "Stop building as I type" : "Build as I type", words: ["live", "auto", "rebuild", "debounce", "set"]) { [unowned self] in autoBuild.toggle() },
-            AppCommand(id: "offline", title: offline ? "Allow the network" : "Refuse the network", words: ["offline", "online", "cache"]) { [unowned self] in toggleOffline() },
-            AppCommand(id: "zoomin", title: "Zoom in on the preview", hint: "⌘+", words: ["enlarge", "bigger", "proof"]) { [unowned self] in zoom(by: 1) },
-            AppCommand(id: "zoomout", title: "Zoom out of the preview", hint: "⌘−", words: ["reduce", "smaller", "proof"]) { [unowned self] in zoom(by: -1) },
-            AppCommand(id: "zoomfit", title: "Fit the preview to width", hint: "⌘0", words: ["zoom", "fit", "width", "reset", "proof"]) { [unowned self] in zoom = .fit },
-            AppCommand(id: "marks", title: "Show issues", words: ["errors", "warnings", "problems", "marks"], disabled: visible.isEmpty) { [unowned self] in rightPane = .marks },
-            AppCommand(id: "presslog", title: pressOpen ? "Hide the press log" : "Show the press log", words: ["log", "tex", "passes"]) { [unowned self] in pressOpen.toggle() },
-            AppCommand(id: "prime", title: "Download the LaTeX essentials", words: ["prime", "cache", "offline", "packages", "fonts", "setup"], disabled: engine.cache == .downloading) { [unowned self] in setUp() },
-        ]
-    }
-}
-
 struct PaletteRow: Identifiable {
     var id: String
     var title: String
@@ -40,14 +9,14 @@ struct PaletteRow: Identifiable {
     var hint: String?
     var text: String?
     var score: Double
-    var command: AppCommand?
+    var command: Command?
 
-    static func rows(for query: String, commands: [AppCommand], hasSelection: Bool) -> [PaletteRow] {
+    static func rows(for query: String, commands: [Command], hasSelection: Bool) -> [PaletteRow] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cmds = commands.filter { !$0.disabled }
+        let cmds = commands.filter { $0.inPalette && $0.isEnabled }
 
         if q.isEmpty {
-            return cmds.map { PaletteRow(id: $0.id, title: $0.title, hint: $0.hint, score: 1, command: $0) }
+            return cmds.map { PaletteRow(id: $0.id, title: $0.label, hint: $0.hint, score: 1, command: $0) }
         }
 
         // Same tokenizer as the snippet matcher, so filler words ("a", "put",
@@ -62,7 +31,7 @@ struct PaletteRow: Identifiable {
             guard score > 0 else { return nil }
             // Commands and snippets share a scale; an exact command match should
             // outrank a loose snippet match, but never a precise one.
-            return PaletteRow(id: c.id, title: c.title, hint: c.hint, score: score * 0.95, command: c)
+            return PaletteRow(id: c.id, title: c.label, hint: c.hint, score: score * 0.95, command: c)
         }
 
         let snippets = suggest(q, hasSelection: hasSelection, limit: 6).map {
@@ -85,7 +54,7 @@ struct PaletteView: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        let rows = PaletteRow.rows(for: query, commands: model.commands, hasSelection: !model.selection.isEmpty)
+        let rows = PaletteRow.rows(for: query, commands: Command.all(session: model, engine: model.engine), hasSelection: !model.selection.isEmpty)
 
         VStack(spacing: 0) {
             TextField("Describe what to insert, or name a command", text: $query)
@@ -120,7 +89,7 @@ struct PaletteView: View {
             focused = true
             active = rows.first?.id
         }
-        .onChange(of: query) { active = PaletteRow.rows(for: query, commands: model.commands, hasSelection: !model.selection.isEmpty).first?.id }
+        .onChange(of: query) { active = PaletteRow.rows(for: query, commands: Command.all(session: model, engine: model.engine), hasSelection: !model.selection.isEmpty).first?.id }
         .onExitCommand(perform: close)
     }
 

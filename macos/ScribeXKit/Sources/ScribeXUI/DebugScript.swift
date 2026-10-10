@@ -11,7 +11,7 @@ import SwiftUI
 ///
 /// Steps: `snap NAME`, `wait SECONDS`, `size WIDTH HEIGHT`, `new`, `open PATH`,
 /// `palette TEXT`, `close`, `export`, `marks`, `type TEXT`, `key TEXT`, `press`, `page NAME`,
-/// `fetch`, `essentials`, `network`, `save`, `undo`, `state LABEL`, `quit`.
+/// `fetch`, `essentials`, `network`, `save`, `undo`, `menus`, `state LABEL`, `quit`.
 public enum DebugScript {
     public static func runIfRequested() {
         let env = ProcessInfo.processInfo.environment
@@ -79,6 +79,18 @@ public enum DebugScript {
                         window.sendEvent(event)
                     }
                 }
+            }
+        case "menus":
+            // The menu bar as the app built it, for checking from a terminal.
+            for top in NSApp.mainMenu?.items ?? [] where ["File", "Format", "Build", "View", "Window"].contains(top.title) {
+                NSApp.mainMenu?.update()
+                top.submenu?.update()
+                let items: [String] = top.submenu?.items.filter { !$0.isSeparatorItem && !$0.title.isEmpty }.map { item in
+                    let mods = item.keyEquivalentModifierMask
+                    let keys = item.keyEquivalent.isEmpty ? "" : " " + (mods.contains(.shift) ? "⇧" : "") + "⌘" + item.keyEquivalent.uppercased()
+                    return "\(item.title)\(keys)\(item.state == .on ? " ✓" : "")\(item.isEnabled ? "" : " (off)")"
+                } ?? []
+                print("menu \(top.title): " + items.joined(separator: " | "))
             }
         case "save": NSDocumentController.shared.documents.first?.save(nil)
         case "undo": NSDocumentController.shared.documents.first?.undoManager?.undo()

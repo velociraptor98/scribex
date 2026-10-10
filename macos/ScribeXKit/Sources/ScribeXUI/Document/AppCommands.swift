@@ -2,7 +2,8 @@ import ScribeXCore
 import SwiftUI
 
 /// The menu bar. New, Open, Open Recent, Save, Save As, Revert, Rename and
-/// Close come from the document system; these are ScribeX's own.
+/// Close come from the document system; ScribeX's own items come from
+/// `Command.all`, the same list the palette searches.
 public struct AppCommands: Commands {
     let engine: Engine
     @FocusedValue(\.session) private var session
@@ -13,70 +14,38 @@ public struct AppCommands: Commands {
     }
 
     public var body: some Commands {
+        let commands = Command.all(session: session, engine: engine)
+
         CommandGroup(replacing: .appSettings) {}
         CommandGroup(replacing: .printItem) {}
-
         CommandGroup(after: .saveItem) {
             Divider()
-            Button("Export as PDF…") { session?.requestExport() }
-                .keyboardShortcut("e")
-                .disabled(session?.preview == nil)
+            items(commands, in: .file)
         }
-
-        CommandMenu("Format") {
-            Group {
-                Button("Bold") { session?.insert("\\textbf{\(caret)}") }
-                    .keyboardShortcut("b")
-                Button("Italic") { session?.insert("\\emph{\(caret)}") }
-                    .keyboardShortcut("i")
-            }
-            .disabled(session == nil)
-        }
-
-        CommandMenu("Build") {
-            Button("Build Now") { session?.build() }
-                .keyboardShortcut("r")
-                .disabled(session == nil)
-            Toggle("Build As I Type", isOn: Binding(
-                get: { session?.autoBuild ?? false },
-                set: { session?.autoBuild = $0 }
-            ))
-            .disabled(session == nil)
-            Divider()
-            Toggle("Offline", isOn: Binding(get: { engine.offline }, set: { _ in engine.toggleOffline() }))
-            Button("Download the LaTeX Essentials", action: engine.setUp)
-                .disabled(engine.cache == .downloading)
-        }
-
+        CommandMenu("Format") { items(commands, in: .format) }
+        CommandMenu("Build") { items(commands, in: .build) }
         CommandGroup(before: .toolbar) {
-            Button("Command Palette…") { session?.paletteOpen.toggle() }
-                .keyboardShortcut("k")
-                .disabled(session == nil)
-            Divider()
-            Button("Zoom In") { session?.zoom(by: 1) }
-                .keyboardShortcut("=")
-                .disabled(session == nil)
-            Button("Zoom Out") { session?.zoom(by: -1) }
-                .keyboardShortcut("-")
-                .disabled(session == nil)
-            Button("Fit to Width") { session?.zoom = .fit }
-                .keyboardShortcut("0")
-                .disabled(session == nil)
-            Divider()
-            Button(session?.rightPane == .marks ? "Show Preview" : "Show Issues") {
-                guard let session else { return }
-                session.rightPane = session.rightPane == .marks ? .proof : .marks
-            }
-            .disabled(session?.visible.isEmpty ?? true)
-            Button(session?.pressOpen == true ? "Hide Press Log" : "Show Press Log") { session?.pressOpen.toggle() }
-                .disabled(session == nil)
+            items(commands, in: .view)
             Divider()
         }
-
         CommandGroup(before: .windowList) {
             Button("Welcome to ScribeX") { openWindow(id: WelcomeView.windowID) }
                 .keyboardShortcut("1", modifiers: [.command, .shift])
             Divider()
+        }
+    }
+
+    private func items(_ commands: [Command], in menu: Command.Menu) -> some View {
+        ForEach(commands.filter { $0.menu == menu }) { command in
+            Group {
+                if let isOn = command.isOn {
+                    Toggle(command.title, isOn: Binding(get: { isOn }, set: { _ in command.run() }))
+                } else {
+                    Button(command.title, action: command.run)
+                }
+            }
+            .keyboardShortcut(command.keys)
+            .disabled(!command.isEnabled)
         }
     }
 }
