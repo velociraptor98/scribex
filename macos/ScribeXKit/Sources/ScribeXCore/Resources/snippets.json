@@ -1,0 +1,169 @@
+[
+  {
+    "id": "table",
+    "words": ["table", "tabular", "grid", "rows", "columns", "cells", "spreadsheet", "matrix of"],
+    "bias": 0.03,
+    "title": "Insert a table — {columns} × {rows}",
+    "preview": "\\begin{tabular}{{spec}} … \\end{tabular}",
+    "generator": "tabular"
+  },
+  {
+    "id": "booktabs",
+    "words": ["booktabs", "ruled", "professional", "toprule", "midrule", "table", "no verticals"],
+    "title": "Insert a booktabs table (ruled, no verticals)",
+    "preview": "\\usepackage{booktabs} · \\toprule … \\bottomrule",
+    "generator": "booktabs"
+  },
+  {
+    "id": "caption",
+    "words": ["caption", "label", "title", "number", "reference", "cross"],
+    "title": "Add a caption and a label",
+    "preview": "\\caption{…} \\label{tab:…}",
+    "text": "\\caption{‸}\n\\label{tab:key}"
+  },
+  {
+    "id": "twocolumn",
+    "words": ["two", "column", "columns", "twocolumn", "double", "page", "layout"],
+    "title": "Set the page in two columns",
+    "preview": "\\documentclass[twocolumn]{…} · \\twocolumn",
+    "text": "\\twocolumn‸"
+  },
+  {
+    "id": "equation",
+    "words": ["equation", "maths", "math", "formula", "numbered", "display", "expression"],
+    "title": "Insert a numbered equation",
+    "preview": "\\begin{equation} … \\end{equation}",
+    "text": "\\begin{equation}\n  ‸\n\\end{equation}"
+  },
+  {
+    "id": "align",
+    "words": ["align", "aligned", "multiline", "several", "lines", "equations", "system"],
+    "title": "Insert aligned equations",
+    "preview": "\\begin{align} … \\end{align}",
+    "text": "\\begin{align}\n  ‸ &= \\\\\n   &=\n\\end{align}"
+  },
+  {
+    "id": "figure",
+    "words": ["figure", "image", "picture", "graphic", "photo", "diagram", "includegraphics", "plot"],
+    "title": "Insert a figure with a caption",
+    "preview": "\\begin{figure} \\includegraphics … \\end{figure}",
+    "text": "\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\textwidth]{‸}\n  \\caption{}\n  \\label{fig:key}\n\\end{figure}"
+  },
+  {
+    "id": "itemize",
+    "words": ["bullet", "bullets", "list", "itemize", "unordered", "points", "dot"],
+    "title": "Insert a bulleted list",
+    "preview": "\\begin{itemize} \\item … \\end{itemize}",
+    "text": "\\begin{itemize}\n  \\item ‸\n  \\item\n\\end{itemize}"
+  },
+  {
+    "id": "enumerate",
+    "words": ["numbered", "list", "enumerate", "ordered", "steps", "count"],
+    "title": "Insert a numbered list",
+    "preview": "\\begin{enumerate} \\item … \\end{enumerate}",
+    "text": "\\begin{enumerate}\n  \\item ‸\n  \\item\n\\end{enumerate}"
+  },
+  {
+    "id": "section",
+    "words": ["section", "heading", "header", "chapter", "part", "title"],
+    "title": "Start a new section",
+    "preview": "\\section{…}",
+    "text": "\\section{‸}"
+  },
+  {
+    "id": "cite",
+    "words": ["cite", "citation", "reference", "bibliography", "source", "paper", "bibtex"],
+    "title": "Cite a work",
+    "preview": "\\cite{key}",
+    "text": "\\cite{‸}"
+  },
+  {
+    "id": "ref",
+    "words": ["ref", "reference", "refer", "cross", "link", "point", "equation", "figure"],
+    "title": "Refer to a label",
+    "preview": "\\ref{key}",
+    "text": "\\ref{‸}"
+  },
+  {
+    "id": "footnote",
+    "words": ["footnote", "note", "aside", "remark", "bottom"],
+    "title": "Add a footnote",
+    "preview": "\\footnote{…}",
+    "text": "\\footnote{‸}"
+  },
+  {
+    "id": "matrix",
+    "words": ["matrix", "matrices", "array", "bracket", "pmatrix", "determinant"],
+    "title": "Insert a {c} × {r} matrix",
+    "preview": "\\begin{pmatrix} … \\end{pmatrix}",
+    "generator": "matrix"
+  },
+  {
+    "id": "verbatim",
+    "words": ["code", "verbatim", "listing", "monospace", "program", "snippet"],
+    "title": "Insert a code block",
+    "preview": "\\begin{verbatim} … \\end{verbatim}",
+    "text": "\\begin{verbatim}\n‸\n\\end{verbatim}"
+  },
+  {
+    "id": "quote",
+    "words": ["quote", "quotation", "block", "excerpt", "indent"],
+    "title": "Insert a block quotation",
+    "preview": "\\begin{quote} … \\end{quote}",
+    "text": "\\begin{quote}\n  ‸\n\\end{quote}"
+  },
+  {
+    "id": "bold",
+    "words": ["bold", "strong", "heavy", "textbf", "emphasis"],
+    "title": "Set text in bold",
+    "selectionTitle": "Set the selection in bold",
+    "preview": "\\textbf{…}",
+    "text": "\\textbf{‸}",
+    "hint": "⌘B"
+  },
+  {
+    "id": "italic",
+    "words": ["italic", "italics", "emphasise", "emphasize", "emph", "slanted"],
+    "title": "Set text in italics",
+    "selectionTitle": "Set the selection in italics",
+    "preview": "\\emph{…}",
+    "text": "\\emph{‸}",
+    "hint": "⌘I"
+  },
+  {
+    "id": "toc",
+    "words": ["contents", "toc", "tableofcontents", "outline", "index"],
+    "title": "Insert a table of contents",
+    "preview": "\\tableofcontents",
+    "text": "\\tableofcontents‸"
+  },
+  {
+    "id": "abstract",
+    "words": ["abstract", "summary", "synopsis"],
+    "title": "Insert an abstract",
+    "preview": "\\begin{abstract} … \\end{abstract}",
+    "text": "\\begin{abstract}\n  ‸\n\\end{abstract}"
+  },
+  {
+    "id": "package",
+    "words": ["package", "usepackage", "import", "library", "load"],
+    "title": "Load a package",
+    "preview": "\\usepackage{…}",
+    "text": "\\usepackage{‸}"
+  },
+  {
+    "id": "pagebreak",
+    "words": ["page", "break", "newpage", "clearpage", "next"],
+    "title": "Break to a new page",
+    "preview": "\\newpage",
+    "text": "\\newpage‸"
+  },
+  {
+    "id": "wrap-table",
+    "words": ["table", "turn", "convert", "selection", "into", "make"],
+    "needsSelection": true,
+    "title": "Turn the selection into a table",
+    "preview": "rows of tab- or comma-separated text → tabular",
+    "text": ""
+  }
+]
