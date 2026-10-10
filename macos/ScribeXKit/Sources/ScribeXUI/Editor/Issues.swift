@@ -1,8 +1,9 @@
 import ScribeXCore
 import SwiftUI
 
-/// An accordion under the preview: one line with the count, opening into
-/// what TeX complained about, in plain words, with fixes.
+/// A drawer under the preview: one line with the count, which stays at the
+/// foot and opens upward into what TeX complained about, in plain words, with
+/// fixes.
 struct Issues: View {
     static let headerHeight: CGFloat = 34
 
@@ -12,11 +13,15 @@ struct Issues: View {
     var body: some View {
         let diags = model.visible
         VStack(spacing: 0) {
+            if isExpanded {
+                list(diags)
+                Divider()
+            }
             Button { isExpanded.toggle() } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.up")
                         .font(.system(size: 10, weight: .semibold))
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
                     Text(summary(diags)).smallCaps()
                     Spacer()
                 }
@@ -26,7 +31,6 @@ struct Issues: View {
             }
             .buttonStyle(.plain)
             .help(isExpanded ? "Hide the issues (⇧⌘M)" : "Show the issues (⇧⌘M)")
-            if isExpanded { list(diags) }
         }
     }
 
@@ -50,8 +54,7 @@ struct Issues: View {
                     : "Everything else built cleanly.")
                     .italic().foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 16)
+            .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
