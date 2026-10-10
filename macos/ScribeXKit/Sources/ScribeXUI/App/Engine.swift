@@ -103,3 +103,15 @@ public final class Engine {
         if cache != .downloading && cache != .failed { cache = .cold }
     }
 }
+
+#if DEBUG
+extension Engine {
+    /// An engine held in one setup state, for previews.
+    static func preview(_ cache: CacheState, files: Int = 0, error: String? = nil) -> Engine {
+        let engine = Engine(worker: URL(filePath: "/usr/bin/false"))
+        engine.cache = cache
+        engine.setup = SetupProgress(files: files, current: files > 0 ? "lmodern.sty" : nil, error: error)
+        return engine
+    }
+}
+#endif
