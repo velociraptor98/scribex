@@ -3,11 +3,30 @@ import SwiftUI
 
 @main
 struct ScribeXApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    @State private var engine = Engine(worker: Engine.bundledWorker)
+
+    init() {
+        #if DEBUG
+        DebugScript.runIfRequested()
+        #endif
+    }
 
     var body: some Scene {
-        // The window is AppKit's (see AppDelegate); SwiftUI adds only the menus.
-        Settings { EmptyView() }
-            .commands { AppCommands(model: delegate.model) }
+        // Shown at launch instead of an untitled document, and from the Window menu.
+        Window("Welcome to ScribeX", id: WelcomeView.windowID) {
+            WelcomeView().environment(engine)
+        }
+        .windowStyle(.hiddenTitleBar)
+        .windowBackgroundDragBehavior(.enabled)
+        .defaultSize(width: 1280, height: 820)
+        .defaultLaunchBehavior(.presented)
+
+        DocumentGroup(newDocument: { TexDocument() }) { file in
+            DocumentWindow(document: file.document, fileURL: file.fileURL, engine: engine)
+                .environment(engine)
+        }
+        .defaultSize(width: 1280, height: 820)
+        .defaultLaunchBehavior(.suppressed)
+        .commands { AppCommands(engine: engine) }
     }
 }

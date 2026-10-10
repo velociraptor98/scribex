@@ -57,7 +57,10 @@ public final class EditorHandle {
 }
 
 struct SourceEditor: NSViewRepresentable {
-    var model: AppModel
+    var model: Session
+    /// Space above the first line, so it lines up with the first row of the
+    /// panes beside it.
+    var topInset: CGFloat = 34
 
     func makeCoordinator() -> Coordinator {
         Coordinator(model: model)
@@ -68,12 +71,15 @@ struct SourceEditor: NSViewRepresentable {
         scroll.hasHorizontalScroller = false
         scroll.scrollerStyle = .overlay
         scroll.automaticallyAdjustsContentInsets = false
-        scroll.contentInsets = NSEdgeInsets(top: 34, left: 0, bottom: 40, right: 30)
-        scroll.backgroundColor = Ink.editor
+        scroll.contentInsets = NSEdgeInsets(top: topInset, left: 0, bottom: 40, right: 30)
+        scroll.backgroundColor = NSColor.scribeEditor
         scroll.drawsBackground = true
 
         let view = scroll.documentView as! LatexTextView
         view.configure()
+        // Edits go on the document's undo manager: that is what marks the
+        // window edited and lets autosave and Edit ▸ Undo work.
+        context.coordinator.undoManager = context.environment.undoManager
         view.textDelegate = context.coordinator
         view.load(model.editor.pending ?? model.source)
         model.editor.pending = nil
@@ -82,16 +88,38 @@ struct SourceEditor: NSViewRepresentable {
         return scroll
     }
 
-    func updateNSView(_ scroll: NSScrollView, context: Context) {}
+    func updateNSView(_ scroll: NSScrollView, context: Context) {
+        context.coordinator.undoManager = context.environment.undoManager
+        if scroll.contentInsets.top != topInset {
+            scroll.contentInsets.top = topInset
+        }
+    }
 
     final class Coordinator: STTextViewDelegate {
-        let model: AppModel
+        let model: Session
         weak var view: LatexTextView?
+        weak var undoManager: UndoManager?
         /// The span the last edit touched, re-coloured once the change lands.
         private var edited: NSRange?
 
-        init(model: AppModel) {
+        init(model: Session) {
             self.model = model
+        }
+
+        /// SwiftUI's document does not count changes from its undo manager as
+        /// an AppKit document does, so the editor reports each one: that is
+        /// what the edited dot and autosave follow.
+        private func noteChange(in view: STTextView) {
+            guard let document = view.window?.windowController?.document as? NSDocument else { return }
+            let undo = document.undoManager
+            document.updateChangeCount(undo?.isUndoing == true ? .changeUndone : undo?.isRedoing == true ? .changeRedone : .changeDone)
+        }
+
+        /// The window's document, once there is a window: its change count is
+        /// what the edited dot and autosave follow. SwiftUI's environment
+        /// manager stands in until then.
+        func undoManager(for textView: STTextView) -> UndoManager? {
+            (textView.window?.windowController?.document as? NSDocument)?.undoManager ?? undoManager
         }
 
         func textView(_ textView: STTextView, shouldChangeTextIn affectedCharRange: NSTextRange, replacementString: String?) -> Bool {
@@ -110,6 +138,7 @@ struct SourceEditor: NSViewRepresentable {
             edited = nil
             if !view.isLoading {
                 model.edit(view.text ?? "")
+                noteChange(in: view)
                 view.completeIfTyping()
             }
         }
@@ -147,12 +176,12 @@ final class LatexTextView: STTextView {
 
     func configure() {
         font = Self.font
-        textColor = Ink.text
-        backgroundColor = Ink.editor
-        insertionPointColor = Ink.accent
+        textColor = NSColor.scribeInk
+        backgroundColor = NSColor.scribeEditor
+        insertionPointColor = NSColor.scribeGilt
         isHorizontallyResizable = false  // wrap lines
         highlightSelectedLine = true
-        selectedLineHighlightColor = Ink.accent(0.07)
+        selectedLineHighlightColor = NSColor.scribeGilt.withAlphaComponent(0.07)
         isIncrementalSearchingEnabled = true
         isAutomaticQuoteSubstitutionEnabled = false
         isAutomaticSpellingCorrectionEnabled = false
@@ -167,8 +196,8 @@ final class LatexTextView: STTextView {
         showsLineNumbers = true
         if let gutter = gutterView {
             gutter.drawSeparator = false
-            gutter.textColor = Ink.text(0.24)
-            gutter.selectedLineTextColor = Ink.text(0.55)
+            gutter.textColor = NSColor.scribeInk.withAlphaComponent(0.24)
+            gutter.selectedLineTextColor = NSColor.scribeInk.withAlphaComponent(0.55)
             gutter.selectedLineHighlightColor = .clear
             gutter.font = NSFont.monospacedDigitSystemFont(ofSize: 11.5, weight: .regular)
             gutter.insets = STRulerInsets(leading: 12, trailing: 14)
@@ -187,11 +216,13 @@ final class LatexTextView: STTextView {
         }
     }
 
+    /// Opening a file is not an edit: nothing to undo, and the document stays clean.
     func load(_ text: String) {
         isLoading = true
+        undoManager?.disableUndoRegistration()
         self.text = text
+        undoManager?.enableUndoRegistration()
         textSelection = NSRange(location: 0, length: 0)
-        undoManager?.removeAllActions()
         highlightAll()
         isLoading = false
     }
@@ -229,17 +260,17 @@ final class LatexTextView: STTextView {
         let text = (self.text ?? "") as NSString
         // One transaction for the lot, rather than a layout pass per token.
         textContentManager.performEditingTransaction {
-            addAttributes([.foregroundColor: Ink.text, .font: Self.font], range: range)
+            addAttributes([.foregroundColor: NSColor.scribeInk, .font: Self.font], range: range)
             latexTokens(in: text, range: range) { token, kind in
                 switch kind {
                 case .command:
-                    addAttributes([.foregroundColor: Ink.accent], range: token)
+                    addAttributes([.foregroundColor: NSColor.scribeGilt], range: token)
                 case .environment, .math:
-                    addAttributes([.foregroundColor: Ink.accent400], range: token)
+                    addAttributes([.foregroundColor: NSColor.scribeGiltLight], range: token)
                 case .bracket:
-                    addAttributes([.foregroundColor: Ink.text(0.55)], range: token)
+                    addAttributes([.foregroundColor: NSColor.scribeInk.withAlphaComponent(0.55)], range: token)
                 case .comment:
-                    addAttributes([.foregroundColor: Ink.text(0.38), .font: Self.italic], range: token)
+                    addAttributes([.foregroundColor: NSColor.scribeInk.withAlphaComponent(0.4), .font: Self.italic], range: token)
                 }
             }
         }
@@ -280,7 +311,7 @@ final class LatexTextView: STTextView {
         for at in candidates {
             guard let partner = partner(of: at, in: text) else { continue }
             matched = [NSRange(location: at, length: 1), NSRange(location: partner, length: 1)]
-            for range in matched { addRenderingAttributes([.backgroundColor: Ink.accent(0.18)], range: range) }
+            for range in matched { addRenderingAttributes([.backgroundColor: NSColor.scribeGilt.withAlphaComponent(0.18)], range: range) }
             return
         }
     }
@@ -415,8 +446,8 @@ struct LatexCompletion: STCompletionItem {
 
     var view: NSView {
         NSHostingView(rootView: Text(label)
-            .font(Fonts.mono(12.5))
-            .foregroundStyle(Tone.text)
+            .font(.system(size: 12.5, design: .monospaced))
+            .foregroundStyle(.ink)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 6))
     }

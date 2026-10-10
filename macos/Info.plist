@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Merged with the keys Xcode generates (GENERATE_INFOPLIST_FILE). Only what
+	     build settings cannot express lives here: the document type. -->
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>TeX Document</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Default</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>org.tug.tex</string>
+			</array>
+		</dict>
+	</array>
+	<!-- Imported, not exported: .tex is not ours, and TeX distributions declare
+	     the same identifier. Declaring it means a .tex file has a real type even
+	     on a Mac where nothing else has registered one. -->
+	<key>UTImportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>org.tug.tex</string>
+			<key>UTTypeDescription</key>
+			<string>TeX Document</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.plain-text</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>tex</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
+</dict>
+</plist>

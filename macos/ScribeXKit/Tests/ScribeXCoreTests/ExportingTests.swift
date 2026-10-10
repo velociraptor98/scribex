@@ -43,17 +43,4 @@ struct RecentTests {
         #expect(when(now.addingTimeInterval(-30 * 3600), now: now) == "Yesterday")
         #expect(when(Date(timeIntervalSince1970: 1_754_222_400), now: now) == "3 Aug")
     }
-
-    @Test func rememberMovesADocumentToTheTopAndCaps() {
-        let suite = "scribex-tests-\(UUID().uuidString)"
-        defer { UserDefaults.standard.removePersistentDomain(forName: suite) }
-        let store = RecentStore(suite: suite)
-
-        for i in 0..<10 { store.remember(RecentDoc(path: "/d\(i).tex", title: "\(i)", sections: 0, citations: 0)) }
-        let list = store.remember(RecentDoc(path: "/d3.tex", title: "again", sections: 1, citations: 0))
-
-        #expect(list.count == RecentStore.limit)
-        #expect(list.first?.title == "again")
-        #expect(store.load().map(\.path).filter { $0 == "/d3.tex" }.count == 1)
-    }
 }

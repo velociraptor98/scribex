@@ -2,8 +2,8 @@ import PDFKit
 import SwiftUI
 
 struct PreviewView: NSViewRepresentable {
-    var preview: AppModel.Preview?
-    var zoom: AppModel.Zoom
+    var preview: Session.Preview?
+    var zoom: Session.Zoom
     var onScale: (Double) -> Void
     var onPages: (Int) -> Void
     var onPage: (Int) -> Void
@@ -19,9 +19,9 @@ struct PreviewView: NSViewRepresentable {
         // Half of the 18px gap between pages above and below each one.
         view.pageBreakMargins = NSEdgeInsets(top: 9, left: 8, bottom: 9, right: 8)
         view.pageShadowsEnabled = false
-        view.backgroundColor = Ink.deep
-        view.minScaleFactor = AppModel.minZoom
-        view.maxScaleFactor = AppModel.maxZoom
+        view.backgroundColor = NSColor.scribeSunken
+        view.minScaleFactor = Session.minZoom
+        view.maxScaleFactor = Session.maxZoom
         view.autoScales = true
         let plates = Plates(frame: view.bounds)
         plates.autoresizingMask = [.width, .height]
@@ -105,7 +105,7 @@ struct PreviewView: NSViewRepresentable {
 
     final class Coordinator {
         var shown: Int?
-        var zoom: AppModel.Zoom?
+        var zoom: Session.Zoom?
         var onScale: ((Double) -> Void)?
         var onPage: ((Int) -> Void)?
         var observers: [any NSObjectProtocol] = []
@@ -137,11 +137,11 @@ final class Plates: NSView {
         for page in pdf.visiblePages {
             let rect = convert(pdf.convert(page.bounds(for: pdf.displayBox), from: page), from: pdf)
             guard rect.intersects(dirtyRect) else { continue }
-            Ink.text(0.14).setStroke()
+            NSColor.scribeInk.withAlphaComponent(0.12).setStroke()
             let outline = NSBezierPath(rect: rect.insetBy(dx: -7.5, dy: -7.5))
             outline.lineWidth = 1
             outline.stroke()
-            Ink.plateEdge.setStroke()
+            NSColor.scribePaperEdge.setStroke()
             let edge = NSBezierPath(rect: rect.insetBy(dx: -3.5, dy: -3.5))
             edge.lineWidth = 7
             edge.stroke()

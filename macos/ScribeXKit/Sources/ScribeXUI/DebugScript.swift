@@ -1,60 +1,76 @@
 #if DEBUG
 import AppKit
 import ScribeXCore
+import SwiftUI
 
-/// A development aid: drive the app through a few steps and render the window
-/// to PNGs after each, without needing Screen Recording permission.
+/// A development aid: drive the app through a few steps and render the front
+/// window to PNGs after each, without needing Screen Recording permission.
 ///
 ///     SCRIBEX_DEBUG_SCRIPT="snap welcome; new; wait 3; snap editor; quit" \
 ///     SCRIBEX_DEBUG_OUT=/tmp/shots ScribeX.app/Contents/MacOS/ScribeX
 ///
-/// Steps: `snap NAME`, `wait SECONDS`, `new`, `open PATH`, `palette TEXT`,
-/// `close`, `export`, `marks`, `type TEXT`, `press`, `fetch`, `essentials`,
-/// `network`, `state LABEL`, `quit`.
-enum DebugScript {
-    static func runIfRequested(model: AppModel, window: NSWindow) {
+/// Steps: `snap NAME`, `wait SECONDS`, `size WIDTH HEIGHT`, `new`, `open PATH`,
+/// `palette TEXT`, `close`, `export`, `marks`, `type TEXT`, `press`, `page NAME`,
+/// `fetch`, `essentials`, `network`, `save`, `undo`, `state LABEL`, `quit`.
+public enum DebugScript {
+    public static func runIfRequested() {
         let env = ProcessInfo.processInfo.environment
         guard let script = env["SCRIBEX_DEBUG_SCRIPT"] else { return }
         let out = URL(filePath: env["SCRIBEX_DEBUG_OUT"] ?? NSTemporaryDirectory())
         Task {
-            try? await Task.sleep(for: .seconds(1))
+            try? await Task.sleep(for: .seconds(1.5))
             for step in script.split(separator: ";").map({ $0.trimmingCharacters(in: .whitespaces) }) {
                 let (verb, arg) = step.firstIndex(of: " ").map {
                     (String(step[..<$0]), String(step[step.index(after: $0)...]))
                 } ?? (step, "")
-                switch verb {
-                case "snap": snap(window, to: out.appending(path: "\(arg).png"))
-                case "wait": try? await Task.sleep(for: .seconds(Double(arg) ?? 1))
-                case "new": model.newDocument()
-                case "palette":
-                    model.paletteOpen = true
-                    try? await Task.sleep(for: .milliseconds(300))
-                    (window.firstResponder as? NSTextView)?.insertText(arg, replacementRange: NSRange(location: NSNotFound, length: 0))
-                case "close": model.paletteOpen = false; model.exportOpen = false
-                case "export": model.requestExport()
-                case "marks": model.rightPane = .marks
-                case "press": model.pressOpen.toggle()
-                case "type": model.editor.insert(arg)
-                case "page":
-                    // Neither snapshot route captures PDFKit's page tiles, so
-                    // this renders the page itself.
-                    if let page = model.preview?.document.page(at: 0) {
-                        let image = page.thumbnail(of: NSSize(width: 600, height: 800), for: .mediaBox)
-                        if let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff) {
-                            try? rep.representation(using: .png, properties: [:])?.write(to: out.appending(path: "\(arg).png"))
-                        }
-                    }
-                case "open": model.adopt((try? String(contentsOfFile: arg, encoding: .utf8)) ?? "", url: URL(filePath: arg), note: "Opened")
-                case "fetch": model.build(allowNetwork: true)
-                case "essentials": model.setUp()
-                case "network": model.toggleOffline()
-                case "state":
-                    print("debug state [\(arg)]: status=\(model.status) busy=\(model.busy) missing=\(model.missing ?? "-") cache=\(model.cache) offline=\(model.offline) preview=\(model.preview?.id ?? -1) fetched=\(model.fetched)")
-                case "quit": NSApp.terminate(nil)
-                default: print("debug script: unknown step \(step)")
-                }
+                await run(verb, arg, out: out)
                 try? await Task.sleep(for: .milliseconds(400))
             }
+        }
+    }
+
+    private static var front: NSWindow? {
+        NSApp.keyWindow ?? NSApp.orderedWindows.first { $0.isVisible && $0.canBecomeKey }
+    }
+
+    private static func run(_ verb: String, _ arg: String, out: URL) async {
+        let session = Session.active
+        switch verb {
+        case "snap": if let front { snap(front, to: out.appending(path: "\(arg).png")) }
+        case "wait": try? await Task.sleep(for: .seconds(Double(arg) ?? 1))
+        case "size":
+            let wh = arg.split(separator: " ").compactMap { Double($0) }
+            if wh.count == 2 { front?.setContentSize(NSSize(width: wh[0], height: wh[1])) }
+        case "new": NSDocumentController.shared.newDocument(nil)
+        case "open":
+            _ = try? await NSDocumentController.shared.openDocument(withContentsOf: URL(filePath: arg), display: true)
+        case "palette":
+            session?.paletteOpen = true
+            try? await Task.sleep(for: .milliseconds(300))
+            (front?.firstResponder as? NSTextView)?.insertText(arg, replacementRange: NSRange(location: NSNotFound, length: 0))
+        case "close": session?.paletteOpen = false; session?.exportOpen = false
+        case "export": session?.requestExport()
+        case "marks": session?.rightPane = .marks
+        case "press": session?.pressOpen.toggle()
+        case "type": session?.editor.insert(arg)
+        case "page":
+            // Neither snapshot route captures PDFKit's page tiles, so this
+            // renders the page itself.
+            if let page = session?.preview?.document.page(at: 0) {
+                let image = page.thumbnail(of: NSSize(width: 600, height: 800), for: .mediaBox)
+                if let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff) {
+                    try? rep.representation(using: .png, properties: [:])?.write(to: out.appending(path: "\(arg).png"))
+                }
+            }
+        case "fetch": session?.build(allowNetwork: true)
+        case "essentials": session?.setUp()
+        case "network": session?.toggleOffline()
+        case "state":
+            print("debug state [\(arg)]: status=\(session?.status ?? "-") busy=\(session?.busy ?? false) windows=\(NSApp.windows.filter(\.isVisible).map { "\($0.title) edited=\($0.isDocumentEdited)" })")
+        case "save": NSDocumentController.shared.documents.first?.save(nil)
+        case "undo": NSDocumentController.shared.documents.first?.undoManager?.undo()
+        case "quit": NSApp.terminate(nil)
+        default: print("debug script: unknown step \(verb)")
         }
     }
 
