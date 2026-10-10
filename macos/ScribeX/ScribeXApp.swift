@@ -13,8 +13,8 @@ struct ScribeXApp: App {
 
     var body: some Scene {
         // Shown at launch instead of an untitled document, and from the Window menu.
-        Window("Welcome to ScribeX", id: WelcomeView.windowID) {
-            WelcomeView().environment(engine)
+        Window("Welcome to ScribeX", id: HomeView.windowID) {
+            HomeView().environment(engine)
         }
         .windowStyle(.hiddenTitleBar)
         .windowBackgroundDragBehavior(.enabled)

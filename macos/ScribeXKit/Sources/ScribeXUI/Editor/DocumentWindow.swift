@@ -38,7 +38,7 @@ public struct DocumentWindow: View {
                 #endif
                 session.scheduleBuild()
                 // A document is open; the welcome window has done its job.
-                dismissWindow(id: WelcomeView.windowID)
+                dismissWindow(id: HomeView.windowID)
             }
     }
 }

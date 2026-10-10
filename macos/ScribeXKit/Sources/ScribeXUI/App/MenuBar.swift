@@ -29,7 +29,7 @@ public struct MenuBar: Commands {
             Divider()
         }
         CommandGroup(before: .windowList) {
-            Button("Welcome to ScribeX") { openWindow(id: WelcomeView.windowID) }
+            Button("Welcome to ScribeX") { openWindow(id: HomeView.windowID) }
                 .keyboardShortcut("1", modifiers: [.command, .shift])
             Divider()
         }

@@ -3,8 +3,8 @@ import SwiftUI
 
 /// The window shown when no document is open: who we are, the ways in, and
 /// the documents the system remembers.
-public struct WelcomeView: View {
-    public static let windowID = "welcome"
+public struct HomeView: View {
+    public static let windowID = "home"
     @Environment(Engine.self) private var engine
     @Environment(\.newDocument) private var newDocument
 
@@ -192,5 +192,5 @@ private struct TemplateSketch: View {
 }
 
 #Preview {
-    WelcomeView().environment(Engine.preview).frame(width: 1280, height: 820)
+    HomeView().environment(Engine.preview).frame(width: 1280, height: 820)
 }
