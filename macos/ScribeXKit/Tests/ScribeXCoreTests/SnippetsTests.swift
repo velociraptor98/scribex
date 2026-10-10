@@ -18,10 +18,10 @@ struct SnippetsTests {
     }
 
     @Test func fillerWordsMatchNothing() {
-        #expect(queryWords("put a 3 by 4 table here") == ["put", "table", "here"])
+        #expect(tokenize("Please put the thing here") == ["thing"])
         #expect(suggest("please put some here").isEmpty)
-        // Words under three letters are filler: "it" no longer reaches italic.
-        #expect(suggest("put it here").isEmpty)
+        // Two letters is a word: "it" reaches itemize and italic by prefix.
+        #expect(suggest("put it here").map(\.id).contains("italic"))
     }
 
     @Test func selectionVariantsNeedASelection() {
