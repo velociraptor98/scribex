@@ -20,7 +20,7 @@ struct ScribeXApp: App {
         .windowBackgroundDragBehavior(.enabled)
         .defaultSize(width: 1280, height: 820)
         .defaultLaunchBehavior(.presented)
-        // The Window menu lists it once, with a shortcut, from AppCommands.
+        // The Window menu lists it once, with a shortcut, from MenuBar.
         .commandsRemoved()
 
         DocumentGroup(newDocument: { TexDocument() }) { file in
@@ -29,6 +29,6 @@ struct ScribeXApp: App {
         }
         .defaultSize(width: 1280, height: 820)
         .defaultLaunchBehavior(.suppressed)
-        .commands { AppCommands(engine: engine) }
+        .commands { MenuBar(engine: engine) }
     }
 }

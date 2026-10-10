@@ -4,7 +4,7 @@ import SwiftUI
 /// The menu bar. New, Open, Open Recent, Save, Save As, Revert, Rename and
 /// Close come from the document system; ScribeX's own items come from
 /// `Command.all`, the same list the palette searches.
-public struct AppCommands: Commands {
+public struct MenuBar: Commands {
     let engine: Engine
     @FocusedValue(\.session) private var session
     @Environment(\.openWindow) private var openWindow
