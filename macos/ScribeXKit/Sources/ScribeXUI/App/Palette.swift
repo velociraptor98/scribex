@@ -55,18 +55,20 @@ struct Palette: View {
     let commands: [Command]
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
+    /// Scored when the query changes rather than on every redraw.
+    @State private var rows: [PaletteRow]
     @State private var active: String?
     @FocusState private var focused: Bool
 
     init(model: Session, commands: [Command]) {
         self.model = model
         self.commands = commands
-        _active = State(initialValue: PaletteRow.rows(for: "", commands: commands, hasSelection: false).first?.id)
+        let rows = PaletteRow.rows(for: "", commands: commands, hasSelection: !model.editor.selectedText.isEmpty)
+        _rows = State(initialValue: rows)
+        _active = State(initialValue: rows.first?.id)
     }
 
     var body: some View {
-        let rows = PaletteRow.rows(for: query, commands: commands, hasSelection: !model.editor.selectedText.isEmpty)
-
         VStack(spacing: 0) {
             TextField("Describe what to insert, or name a command", text: $query)
                 .textFieldStyle(.plain)
@@ -103,9 +105,11 @@ struct Palette: View {
         }
         .frame(width: 600)
         .scribeStyle()
-        // The field starts focused and the first row selected (see init).
         .defaultFocus($focused, true)
-        .onChange(of: query) { active = PaletteRow.rows(for: query, commands: commands, hasSelection: !model.editor.selectedText.isEmpty).first?.id }
+        .onChange(of: query) {
+            rows = PaletteRow.rows(for: query, commands: commands, hasSelection: !model.editor.selectedText.isEmpty)
+            active = rows.first?.id
+        }
         .onExitCommand(perform: close)
     }
 
