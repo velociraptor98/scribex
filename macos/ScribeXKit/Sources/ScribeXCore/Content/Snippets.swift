@@ -7,6 +7,8 @@ import Foundation
 /// Where the caret should land after an insertion. Stripped before insert.
 public let caret = "\u{2038}"
 
+/// A snippet ready to insert. How well it fits a query is not part of it:
+/// that is `relevance`, worked out by whoever is ranking.
 public struct Suggestion: Hashable, Sendable, Identifiable {
     public var id: String
     public var title: String
@@ -15,17 +17,8 @@ public struct Suggestion: Hashable, Sendable, Identifiable {
     /// Empty for "turn the selection into a table", which the caller builds
     /// from the selection itself.
     public var text: String
-    public var score: Double
-
-    /// What an intent builds; `suggest` fills in the id and the score.
-    init(title: String, preview: String? = nil, text: String, hint: String? = nil) {
-        id = ""
-        self.title = title
-        self.preview = preview
-        self.hint = hint
-        self.text = text
-        score = 0
-    }
+    /// The trigger words it matches on.
+    public var words: [String]
 }
 
 private struct Query: Sendable {
@@ -98,8 +91,9 @@ private func build(_ entry: Entry, _ q: Query) -> Suggestion {
     default: entry.text ?? ""
     }
     return Suggestion(
+        id: entry.id,
         title: fill(q.hasSelection ? entry.selectionTitle ?? entry.title : entry.title),
-        preview: entry.preview.map(fill), text: text, hint: entry.hint
+        preview: entry.preview.map(fill), hint: entry.hint, text: text, words: entry.words
     )
 }
 
@@ -117,11 +111,14 @@ public func tokenize(_ s: String) -> [String] {
         .filter { $0.count > 1 && !stopWords.contains($0) }
 }
 
-private func score(_ entry: Entry, _ words: [String]) -> Double {
+/// How well typed `words` fit an item's `keywords`, from 0 (not at all) up:
+/// 2 for each word matched exactly, 1 for a prefix either way, averaged over
+/// the words. One rule for snippets and commands alike, so they rank together.
+public func relevance(of keywords: [String], to words: [String]) -> Double {
     if words.isEmpty { return 0 }
     var hits = 0
     for w in words {
-        for k in entry.words {
+        for k in keywords {
             if k == w {
                 hits += 2
                 break
@@ -132,8 +129,8 @@ private func score(_ entry: Entry, _ words: [String]) -> Double {
             }
         }
     }
-    // Normalise so a long intent vocabulary is not an advantage.
-    return hits == 0 ? 0 : Double(hits) / Double(words.count)
+    // Averaged over the query, so a long keyword list is no advantage.
+    return Double(hits) / Double(words.count)
 }
 
 public func suggest(_ text: String, hasSelection: Bool = false, limit: Int = 6) -> [Suggestion] {
@@ -144,20 +141,17 @@ public func suggest(_ text: String, hasSelection: Bool = false, limit: Int = 6) 
         hasSelection: hasSelection
     )
 
-    var out: [Suggestion] = []
-    for entry in entries where hasSelection || entry.needsSelection != true {
-        let sc = score(entry, words)
-        if sc <= 0 { continue }
-        var suggestion = build(entry, q)
-        suggestion.id = entry.id
-        suggestion.score = sc + (entry.bias ?? 0)
-        out.append(suggestion)
-    }
-
-    out.sort { a, b in
-        a.score != b.score ? a.score > b.score : a.title.localizedCompare(b.title) == .orderedAscending
-    }
-    return Array(out.prefix(limit))
+    // Best first; `bias` only settles ties, then the title does.
+    return entries
+        .filter { hasSelection || $0.needsSelection != true }
+        .map { (entry: $0, fit: relevance(of: $0.words, to: words)) }
+        .filter { $0.fit > 0 }
+        .sorted { a, b in
+            let x = a.fit + (a.entry.bias ?? 0), y = b.fit + (b.entry.bias ?? 0)
+            return x != y ? x > y : a.entry.title.localizedCompare(b.entry.title) == .orderedAscending
+        }
+        .prefix(limit)
+        .map { build($0.entry, q) }
 }
 
 public func selectionToTable(_ selection: String) -> String? {

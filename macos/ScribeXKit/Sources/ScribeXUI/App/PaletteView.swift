@@ -8,40 +8,32 @@ struct PaletteRow: Identifiable {
     var preview: String?
     var hint: String?
     var text: String?
-    var score: Double
     var command: Command?
 
+    /// Snippets and commands in one list, both ranked by `relevance`.
     static func rows(for query: String, commands: [Command], hasSelection: Bool) -> [PaletteRow] {
-        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let cmds = commands.filter { $0.inPalette && $0.isEnabled }
-
-        if q.isEmpty {
-            return cmds.map { PaletteRow(id: $0.id, title: $0.label, hint: $0.hint, score: 1, command: $0) }
+        if query.trimmingCharacters(in: .whitespaces).isEmpty {
+            return cmds.map { PaletteRow(id: $0.id, title: $0.label, hint: $0.hint, command: $0) }
         }
 
-        // Same tokenizer as the snippet matcher, so filler words ("a", "put",
-        // "here") cannot drag in every command that happens to contain the letter.
-        let words = tokenize(q)
-        let scored: [PaletteRow] = cmds.compactMap { c in
-            let hay = tokenize(([c.title] + c.words).joined(separator: " "))
-            // Match whole words or their prefixes, never substrings — otherwise
-            // "as" finds "Save as…" by way of the middle of a word.
-            let hits = words.filter { w in hay.contains { $0.hasPrefix(w) || w.hasPrefix($0) } }.count
-            let score = words.isEmpty ? 0 : Double(hits) / Double(words.count)
-            guard score > 0 else { return nil }
-            // Commands and snippets share a scale; an exact command match should
-            // outrank a loose snippet match, but never a precise one.
-            return PaletteRow(id: c.id, title: c.label, hint: c.hint, score: score * 0.95, command: c)
+        let words = tokenize(query)
+        let snippetRows = suggest(query, hasSelection: hasSelection).map {
+            (row: PaletteRow(id: $0.id, title: $0.title, preview: $0.preview, hint: $0.hint, text: $0.text),
+             score: relevance(of: $0.words, to: words))
         }
-
-        let snippets = suggest(q, hasSelection: hasSelection, limit: 6).map {
-            PaletteRow(id: $0.id, title: $0.title, preview: $0.preview, hint: $0.hint, text: $0.text, score: $0.score)
+        // Whole words and their prefixes, as for snippets, never substrings:
+        // otherwise "as" would find "Save As…" by way of the middle of a word.
+        let commandRows = cmds.map {
+            (row: PaletteRow(id: $0.id, title: $0.label, hint: $0.hint, command: $0),
+             score: relevance(of: tokenize(([$0.title] + $0.words).joined(separator: " ")), to: words))
         }
-        // Stable on ties, so snippets keep their own order ahead of commands.
-        return Array((snippets + scored).enumerated()
+        // On a tie the earlier row wins: snippets in their own order, then commands.
+        return (snippetRows + commandRows).enumerated()
+            .filter { $0.element.score > 0 }
             .sorted { $0.element.score != $1.element.score ? $0.element.score > $1.element.score : $0.offset < $1.offset }
-            .map(\.element)
-            .prefix(7))
+            .prefix(7)
+            .map(\.element.row)
     }
 }
 
