@@ -1,7 +1,9 @@
 import ScribeXCore
 import SwiftUI
 
-/// Contents · source · preview, with the press log along the foot.
+/// Contents · source · preview side by side, the issues panel beneath the
+/// source and preview, and the press log along the foot. Every part but the
+/// source can be closed; the splits resize them.
 struct EditorScreen: View {
     let model: Session
 
@@ -10,13 +12,29 @@ struct EditorScreen: View {
             SetupView(compact: true)
             banners
             HSplitView {
-                ContentsPane(model: model).frame(minWidth: 150, idealWidth: 190, maxWidth: 300)
-                SourceEditor(model: model).frame(minWidth: 300)
-                PreviewPane(model: model).frame(minWidth: 320, idealWidth: 560)
+                if model.contentsOpen {
+                    ContentColumn(model: model).frame(minWidth: 150, idealWidth: 190, maxWidth: 300)
+                }
+                VSplitView {
+                    HSplitView {
+                        Editor(model: model).frame(minWidth: 300)
+                        if model.rendererOpen {
+                            Renderer(model: model).frame(minWidth: 320, idealWidth: 560)
+                        }
+                    }
+                    .frame(minHeight: 240)
+                    if model.issuesOpen {
+                        Issues(model: model).frame(minHeight: 100, idealHeight: 220)
+                    }
+                }
             }
             PressLogView(model: model)
         }
         .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button("Contents", systemImage: "sidebar.left") { model.contentsOpen.toggle() }
+                    .help(model.contentsOpen ? "Hide the contents (⌃⌘S)" : "Show the contents (⌃⌘S)")
+            }
             ToolbarItemGroup(placement: .primaryAction) {
                 if let last = model.fetched.last {
                     ProgressView().controlSize(.small)
@@ -32,6 +50,15 @@ struct EditorScreen: View {
             }
             // Status rather than an action, so no glass capsule behind it.
             .sharedBackgroundVisibility(.hidden)
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button("Issues", systemImage: "rectangle.bottomthird.inset.filled") {
+                    model.issuesOpen.toggle()
+                }
+                .badge(model.visible.count)
+                .help(model.issuesOpen ? "Hide the issues (⇧⌘M)" : "Show the issues (⇧⌘M)")
+                Button("Preview", systemImage: "sidebar.right") { model.rendererOpen.toggle() }
+                    .help(model.rendererOpen ? "Hide the preview (⌥⌘P)" : "Show the preview (⌥⌘P)")
+            }
         }
     }
 
@@ -66,110 +93,6 @@ private struct Banner<Content: View>: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
             .background(Color.gilt.opacity(0.12))
-    }
-}
-
-private struct ContentsPane: View {
-    let model: Session
-
-    var body: some View {
-        let sections = model.sections
-        // Indent relative to the shallowest heading present, so an article whose
-        // top level is \section is not pushed in by levels it never uses.
-        let base = sections.map(\.level).min() ?? 0
-        let tally = model.tally
-
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Contents").smallCaps().padding(16)
-            List(sections.indices, id: \.self) { i in
-                let entry = sections[i]
-                Button { model.editor.goto(entry.line) } label: {
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text(entry.number).foregroundStyle(.tertiary).monospacedDigit()
-                        Text(entry.title.isEmpty ? "Untitled" : entry.title).italic(entry.title.isEmpty)
-                    }
-                    .padding(.leading, CGFloat(entry.level - base) * 12)
-                    .lineLimit(1)
-                }
-                .buttonStyle(.plain)
-                .help("Line \(entry.line)")
-            }
-            .scrollContentBackground(.hidden)
-            .overlay { if sections.isEmpty { Text("No sections yet").italic().foregroundStyle(.secondary) } }
-            Text("\(plural(tally.sections, "section")) · \(plural(tally.equations, "equation"))\n\(plural(tally.citations, "citation"))")
-                .font(Fonts.text(11.5)).foregroundStyle(.secondary).padding(16)
-        }
-    }
-
-    private func plural(_ n: Int, _ word: String) -> String { "\(n) \(word)\(n == 1 ? "" : "s")" }
-}
-
-private struct PreviewPane: View {
-    let model: Session
-    /// Reported by the PDF view as it scrolls; nothing else needs them.
-    @State private var pages = 0
-    @State private var page = 1
-
-    var body: some View {
-        @Bindable var model = model
-        let issues = model.visible.count
-
-        VStack(spacing: 0) {
-            HStack {
-                Picker("Show", selection: $model.rightPane) {
-                    Text("Preview").tag(Session.RightPane.proof)
-                    Text(issues > 0 ? "Issues · \(issues)" : "Issues").tag(Session.RightPane.marks)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
-                Spacer()
-                Button("Export PDF…", action: model.requestExport)
-                    .disabled(model.preview == nil || model.busy)
-            }
-            .padding(12)
-
-            Group {
-                if model.rightPane == .proof {
-                    PreviewView(preview: model.preview, zoom: model.zoom,
-                                onScale: { model.scale = $0 }, onPages: { pages = $0 }, onPage: { page = $0 })
-                        .overlay { if model.preview == nil { Text("Nothing built yet").italic().foregroundStyle(.secondary) } }
-                } else {
-                    MarksView(model: model)
-                }
-            }
-            .frame(maxHeight: .infinity)
-
-            HStack(spacing: 8) {
-                Text(pages > 0 ? "Page \(min(page, pages)) of \(pages)" : "No preview yet")
-                Spacer()
-                if model.rightPane == .proof { zoomControls }
-                Spacer()
-                Text(model.status).lineLimit(1).opacity(model.busy ? 0.6 : 1)
-            }
-            .font(Fonts.text(11.5))
-            .foregroundStyle(.secondary)
-            .monospacedDigit()
-            .controlSize(.small)
-            .padding(12)
-        }
-        .background(.sunken)
-    }
-
-    private var zoomControls: some View {
-        HStack(spacing: 6) {
-            ControlGroup {
-                Button("Zoom Out", systemImage: "minus") { model.zoom(by: -1) }.disabled(model.scale <= Session.minZoom)
-                Button("Zoom In", systemImage: "plus") { model.zoom(by: 1) }.disabled(model.scale >= Session.maxZoom)
-            }
-            .fixedSize()
-            Button("\(Int((model.scale * 100).rounded()))%") { model.zoom = .scale(1) }
-                .buttonStyle(.borderless)
-                .help("Actual size")
-            Toggle("Fit", isOn: Binding(get: { model.zoom == .fit }, set: { model.zoom = $0 ? .fit : .scale(model.scale) }))
-                .toggleStyle(.button)
-                .help("Fit to width (⌘0)")
-        }
     }
 }
 

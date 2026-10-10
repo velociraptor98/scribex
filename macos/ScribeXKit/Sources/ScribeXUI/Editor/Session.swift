@@ -8,7 +8,6 @@ import SwiftUI
 /// itself, saving and the edited state belong to the document system.
 @Observable
 public final class Session {
-    public enum RightPane { case proof, marks }
 
     public enum Zoom: Equatable {
         case fit
@@ -51,7 +50,9 @@ public final class Session {
     var zoom = Zoom.fit
     /// What "fit" resolves to on screen; zooming steps from here.
     var scale = 1.0
-    var rightPane = RightPane.proof
+    var contentsOpen = true
+    var rendererOpen = true
+    var issuesOpen = false
     var pressOpen = false
     var paletteOpen = false
     var exportOpen = false

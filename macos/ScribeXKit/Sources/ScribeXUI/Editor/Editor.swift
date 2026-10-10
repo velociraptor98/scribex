@@ -56,7 +56,7 @@ public final class EditorHandle {
     }
 }
 
-struct SourceEditor: NSViewRepresentable {
+struct Editor: NSViewRepresentable {
     var model: Session
     /// Space above the first line, so it lines up with the first row of the
     /// panes beside it.

@@ -51,7 +51,9 @@ public enum DebugScript {
             (front?.firstResponder as? NSTextView)?.insertText(arg, replacementRange: NSRange(location: NSNotFound, length: 0))
         case "close": session?.paletteOpen = false; session?.exportOpen = false
         case "export": session?.requestExport()
-        case "marks": session?.rightPane = .marks
+        case "issues": session?.issuesOpen.toggle()
+        case "contents": session?.contentsOpen.toggle()
+        case "renderer": session?.rendererOpen.toggle()
         case "press": session?.pressOpen.toggle()
         case "type": session?.editor.insert(arg)
         case "page":

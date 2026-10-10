@@ -61,12 +61,15 @@ struct Command: Identifiable {
                     menu: .view, isEnabled: open) { session?.zoom(by: -1) },
             Command(id: "zoomfit", title: "Fit to Width", keys: KeyboardShortcut("0"), words: ["zoom", "fit", "reset", "preview"],
                     menu: .view, isEnabled: open) { session?.zoom = .fit },
-            Command(id: "issues", title: session?.rightPane == .marks ? "Show Preview" : "Show Issues",
-                    words: ["errors", "warnings", "problems"], menu: .view,
-                    isEnabled: !(session?.visible.isEmpty ?? true)) {
-                guard let session else { return }
-                session.rightPane = session.rightPane == .marks ? .proof : .marks
-            },
+            Command(id: "contents", title: session?.contentsOpen == false ? "Show Contents" : "Hide Contents",
+                    keys: KeyboardShortcut("s", modifiers: [.control, .command]), words: ["outline", "sections", "sidebar"],
+                    menu: .view, isEnabled: open) { session?.contentsOpen.toggle() },
+            Command(id: "preview", title: session?.rendererOpen == false ? "Show Preview" : "Hide Preview",
+                    keys: KeyboardShortcut("p", modifiers: [.option, .command]), words: ["pdf", "pages", "renderer"],
+                    menu: .view, isEnabled: open) { session?.rendererOpen.toggle() },
+            Command(id: "issues", title: session?.issuesOpen == true ? "Hide Issues" : "Show Issues",
+                    keys: KeyboardShortcut("m", modifiers: [.shift, .command]), words: ["errors", "warnings", "problems"],
+                    menu: .view, isEnabled: open) { session?.issuesOpen.toggle() },
             Command(id: "presslog", title: session?.pressOpen == true ? "Hide Press Log" : "Show Press Log",
                     words: ["log", "tex", "passes"], menu: .view, isEnabled: open) { session?.pressOpen.toggle() },
         ]

@@ -1,16 +1,33 @@
 import ScribeXCore
 import SwiftUI
 
-/// The Issues tab: what TeX complained about, in plain words, with fixes.
-struct MarksView: View {
+/// The panel under the source and preview: what TeX complained about, in
+/// plain words, with fixes.
+struct Issues: View {
     let model: Session
 
     var body: some View {
         let diags = model.visible
+        VStack(spacing: 0) {
+            HStack {
+                Text(diags.isEmpty ? "Issues" : "Issues · \(diags.count)").smallCaps()
+                Spacer()
+                Button("Close", systemImage: "xmark") { model.issuesOpen = false }
+                    .buttonStyle(.borderless)
+                    .labelStyle(.iconOnly)
+                    .help("Hide the issues (⇧⌘M)")
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            list(diags)
+        }
+    }
+
+    private func list(_ diags: [Diagnostic]) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 ForEach(diags) { d in
-                    MarkRow(model: model, diagnostic: d)
+                    IssueRow(model: model, diagnostic: d)
                     Divider()
                 }
                 Text(diags.isEmpty
@@ -19,12 +36,13 @@ struct MarksView: View {
                     .italic().foregroundStyle(.secondary)
             }
             .padding(.horizontal, 16)
+            .padding(.bottom, 16)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
 
-private struct MarkRow: View {
+private struct IssueRow: View {
     let model: Session
     let diagnostic: Diagnostic
 
@@ -66,40 +84,6 @@ private struct MarkRow: View {
     }
 }
 
-/// The strip along the window's foot: the last build in one line, opening
-/// into TeX's passes.
-struct PressLogView: View {
-    let model: Session
-
-    var body: some View {
-        @Bindable var model = model
-        DisclosureGroup(isExpanded: $model.pressOpen) {
-            let rows = model.press.isEmpty ? [PressRow(stage: "—", detail: "no run yet")] : model.press
-            Grid(alignment: .leading, verticalSpacing: 4) {
-                ForEach(rows) { row in
-                    GridRow {
-                        Text(row.stage)
-                        Text(row.detail).foregroundStyle(row.flagged ? AnyShapeStyle(.gilt) : AnyShapeStyle(.secondary))
-                    }
-                }
-            }
-            .font(.system(size: 11.5, design: .monospaced))
-            .textSelection(.enabled)
-            .padding(.top, 8)
-        } label: {
-            HStack {
-                Text("Press log").smallCaps()
-                Spacer()
-                Text("Tectonic" + (model.buildMs.map { " · " + String(format: "%.2f s", Double($0) / 1000) } ?? ""))
-                    .font(Fonts.text(11.5)).foregroundStyle(.secondary).monospacedDigit()
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(.bar)
-    }
-}
-
 #Preview {
     let issue = Diagnostic(
         severity: .error, title: "Unknown command",
@@ -107,5 +91,5 @@ struct PressLogView: View {
         raw: "Undefined control sequence.", line: 12,
         fixes: [Fix(label: "Use \\emph", line: 12, find: "\\emhp", replace: "\\emph")]
     )
-    MarksView(model: .preview(issues: [issue])).scribeStyle().frame(width: 520, height: 400)
+    Issues(model: .preview(issues: [issue])).scribeStyle().frame(width: 900, height: 260)
 }

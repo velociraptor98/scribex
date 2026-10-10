@@ -13,7 +13,7 @@ extension UTType {
 /// prompts; this type only converts between the file and its text.
 ///
 /// A reference type, so that edits register on the document's undo manager
-/// (see `SourceEditor`) and that is what marks the window edited.
+/// (see `Editor`) and that is what marks the window edited.
 public nonisolated final class TexDocument: ReferenceFileDocument, @unchecked Sendable {
     public static let readableContentTypes: [UTType] = [.tex, .plainText]
     public static let writableContentTypes: [UTType] = [.tex]
