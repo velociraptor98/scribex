@@ -1,11 +1,32 @@
 import ScribeXCore
 import SwiftUI
 
-/// The content of one document window. `DocumentGroup` makes one per open
+/// Which parts of the window are showing. The source always is.
+struct Panels: Equatable {
+    var contents = true
+    var preview = true
+    var issues = false
+}
+
+/// The sheets a document window can show, one at a time.
+enum DocumentSheet: Identifiable {
+    case palette, export
+    var id: Self { self }
+}
+
+/// One document window: contents · source · preview side by side, with the
+/// issues panel beneath the preview. `DocumentGroup` makes one per open
 /// document and supplies the title, proxy icon, edited dot and save prompts.
+///
+/// Every part but the source can be closed, and the splits resize them. The
+/// window's own state (panels, zoom, the open sheet) lives here, the nearest
+/// view its parts share, and reaches the menu bar through focus.
 public struct DocumentView: View {
     @State private var session: Session
     private let fileURL: URL?
+    @State private var panels = Panels()
+    @State private var zoom = Zoom()
+    @State private var sheet: DocumentSheet?
     @Environment(\.dismissWindow) private var dismissWindow
 
     public init(document: TexDocument, fileURL: URL?, engine: Engine) {
@@ -16,25 +37,127 @@ public struct DocumentView: View {
     }
 
     public var body: some View {
-        EditorScreen(model: session)
-            .frame(minWidth: 880, minHeight: 560)
-            .scribeStyle()
-            .environment(session.engine)
-            .focusedSceneValue(\.session, session)
-            .onChange(of: fileURL) { _, url in session.fileURL = url }
-            .onChange(of: session.engine.cache) { _, cache in
-                if cache == .ready { session.build() }
-            }
-            .onAppear { session.scheduleBuild() }
-            .background(WindowProbe { window in
-                // A document is open; the welcome window has done its job.
-                // If it was full screen, this window takes its place there.
-                let home = NSApp.windows.first { $0.identifier?.rawValue.hasPrefix(HomeView.windowID) == true }
-                if home?.styleMask.contains(.fullScreen) == true, !window.styleMask.contains(.fullScreen) {
-                    DispatchQueue.main.async { window.toggleFullScreen(nil) }
+        VStack(spacing: 0) {
+            SetupView(compact: true)
+            banners
+            HSplitView {
+                if panels.contents {
+                    Contents(model: session, isOpen: $panels.contents).frame(minWidth: 150, idealWidth: 190, maxWidth: 300)
                 }
-                dismissWindow(id: HomeView.windowID)
-            })
+                Editor(model: session).frame(minWidth: 300)
+                if panels.preview || panels.issues {
+                    VSplitView {
+                        if panels.preview {
+                            Renderer(model: session, zoom: $zoom) { sheet = .export }.frame(minHeight: 240)
+                        }
+                        if panels.issues {
+                            Issues(model: session, isOpen: $panels.issues).frame(minHeight: 100, idealHeight: 220)
+                        }
+                    }
+                    .frame(minWidth: 320, idealWidth: 560)
+                }
+            }
+        }
+        .sheet(item: $sheet) { which in
+            switch which {
+            case .palette:
+                PaletteView(model: session, commands: Command.all(focus, engine: session.engine))
+            case .export:
+                if let preview = session.preview {
+                    ExportSheet(model: session, pdf: preview.data, documentSheet: sheetOf(session.source))
+                }
+            }
+        }
+        .focusedSceneValue(\.panels, $panels)
+        .focusedSceneValue(\.zoom, $zoom)
+        .focusedSceneValue(\.sheet, $sheet)
+        #if DEBUG
+        .onAppear { DebugScript.focus = focus }
+        #endif
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button("Contents", systemImage: "sidebar.left") { panels.contents.toggle() }
+                    .help(panels.contents ? "Hide the contents (⌃⌘S)" : "Show the contents (⌃⌘S)")
+            }
+            ToolbarItemGroup(placement: .primaryAction) {
+                if let last = session.fetched.last {
+                    ProgressView().controlSize(.small)
+                    Text("Downloading \(last)").font(Fonts.text(11.5)).foregroundStyle(.secondary)
+                }
+                // A button, not a toggle: a toolbar toggle that is on draws as a
+                // white disc, and offline is the normal state.
+                Button(action: session.toggleOffline) {
+                    Label(session.offline ? "Offline" : "Network", systemImage: session.offline ? "wifi.slash" : "wifi")
+                        .labelStyle(.titleAndIcon)
+                }
+                .help(session.offline ? "The engine refuses all network access" : "The engine may fetch missing resources")
+            }
+            // Status rather than an action, so no glass capsule behind it.
+            .sharedBackgroundVisibility(.hidden)
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button("Issues", systemImage: "rectangle.bottomthird.inset.filled") { panels.issues.toggle() }
+                    .badge(session.visible.count)
+                    .help(panels.issues ? "Hide the issues (⇧⌘M)" : "Show the issues (⇧⌘M)")
+                Button("Preview", systemImage: "sidebar.right") { panels.preview.toggle() }
+                    .help(panels.preview ? "Hide the preview (⌥⌘P)" : "Show the preview (⌥⌘P)")
+            }
+        }
+        .frame(minWidth: 880, minHeight: 560)
+        .scribeStyle()
+        .environment(session.engine)
+        .focusedSceneValue(\.session, session)
+        .onChange(of: fileURL) { _, url in session.fileURL = url }
+        .onChange(of: session.engine.cache) { _, cache in
+            if cache == .ready { session.build() }
+        }
+        .onAppear { session.scheduleBuild() }
+        .background(WindowProbe { window in
+            // A document is open; the welcome window has done its job.
+            // If it was full screen, this window takes its place there.
+            let home = NSApp.windows.first { $0.identifier?.rawValue.hasPrefix(HomeView.windowID) == true }
+            if home?.styleMask.contains(.fullScreen) == true, !window.styleMask.contains(.fullScreen) {
+                DispatchQueue.main.async { window.toggleFullScreen(nil) }
+            }
+            dismissWindow(id: HomeView.windowID)
+        })
+    }
+
+    /// The palette's commands act on this window's state directly.
+    private var focus: Command.Focus {
+        Command.Focus(session: session, panels: $panels, zoom: $zoom, sheet: $sheet)
+    }
+
+    @ViewBuilder private var banners: some View {
+        if let missing = session.missing, session.engine.cache == .ready {
+            Banner {
+                Text("\(Text(missing).monospaced().foregroundStyle(.gilt)) is not in the offline cache.")
+                Button("Fetch it") { session.build(allowNetwork: true) }.buttonStyle(.borderedProminent)
+                Button("Download the essentials", action: session.setUp)
+                Text("both need the network, once").italic().foregroundStyle(.secondary)
+            }
+            .disabled(session.busy)
+        }
+        if let absent = session.absent {
+            Banner {
+                Text("\(Text(absent).monospaced().foregroundStyle(.gilt)) was not found. It is not part of the TeX distribution — put it in the same folder as \(session.name).")
+                if session.fileURL != nil { Button("Show the folder", action: session.revealFolder) }
+            }
+        }
+    }
+}
+
+/// A strip under the toolbar for something that needs a decision.
+private struct Banner<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        HStack(spacing: 12) { content; Spacer(minLength: 0) }
+            .font(Fonts.text(12.5))
+            .lineLimit(2)
+            .controlSize(.small)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color.gilt.opacity(0.12))
     }
 }
 
@@ -56,4 +179,9 @@ private struct WindowProbe: NSViewRepresentable {
     }
 
     func updateNSView(_ probe: Probe, context: Context) {}
+}
+
+#Preview {
+    DocumentView(document: TexDocument(), fileURL: nil, engine: .preview)
+        .frame(width: 1280, height: 820)
 }
