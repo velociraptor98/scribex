@@ -159,14 +159,14 @@ no Screen Recording permission; see `DebugScript.swift`.
 | `macos/ScribeXKit/Sources/ScribeXCore/Latex/Highlighting.swift` | Tokens for syntax colouring, line by line |
 | `macos/ScribeXKit/Sources/ScribeXCore/Content/Snippets.swift` | Plain-English → LaTeX snippet matcher |
 | `macos/ScribeXKit/Sources/ScribeXCore/Content/Templates.swift` | Starter templates; their LaTeX is in `Resources/Templates` |
-| `macos/ScribeXKit/Sources/ScribeXUI/Document/TexDocument.swift` | The .tex document type; the document system does the file handling |
-| `macos/ScribeXKit/Sources/ScribeXUI/Document/Engine.swift` | Shared by all windows: the typesetter, download cache, offline switch |
-| `macos/ScribeXKit/Sources/ScribeXUI/Document/Session.swift` | One window: builds, preview, issues, zoom, export |
-| `macos/ScribeXKit/Sources/ScribeXUI/Document/Commands.swift` | Every command, defined once for the menu bar and the ⌘K palette |
-| `macos/ScribeXKit/Sources/ScribeXUI/Document/MenuBar.swift` | Lays the commands out in the menus, acting on the front window through `@FocusedValue` |
-| `macos/ScribeXKit/Sources/ScribeXUI/SourceEditor.swift` | STTextView setup, LaTeX colouring, brackets, completion |
-| `macos/ScribeXKit/Sources/ScribeXUI/PreviewView.swift` | PDFKit preview; keeps scroll position across rebuilds |
-| `macos/ScribeXKit/Sources/ScribeXUI/Style.swift` | The book look over native controls: colours, fonts, `scribeStyle()` |
+| `macos/ScribeXKit/Sources/ScribeXUI/Editor/TexDocument.swift` | The .tex document type; the document system does the file handling |
+| `macos/ScribeXKit/Sources/ScribeXUI/App/Engine.swift` | Shared by all windows: the typesetter, download cache, offline switch |
+| `macos/ScribeXKit/Sources/ScribeXUI/Editor/Session.swift` | One window: builds, preview, issues, zoom, export |
+| `macos/ScribeXKit/Sources/ScribeXUI/App/Commands.swift` | Every command, defined once for the menu bar and the ⌘K palette |
+| `macos/ScribeXKit/Sources/ScribeXUI/App/MenuBar.swift` | Lays the commands out in the menus, acting on the front window through `@FocusedValue` |
+| `macos/ScribeXKit/Sources/ScribeXUI/Editor/SourceEditor.swift` | STTextView setup, LaTeX colouring, brackets, completion |
+| `macos/ScribeXKit/Sources/ScribeXUI/Editor/PreviewView.swift` | PDFKit preview; keeps scroll position across rebuilds |
+| `macos/ScribeXKit/Sources/ScribeXUI/App/Style.swift` | The book look over native controls: colours, fonts, `scribeStyle()` |
 | `macos/licenses/` | Third-party licences, shipped inside the app |
 
 ## Licences
