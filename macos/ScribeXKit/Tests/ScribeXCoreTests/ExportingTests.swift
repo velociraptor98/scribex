@@ -34,13 +34,4 @@ struct RecentTests {
         #expect(documentTitle("\\title{}", path: "/x/a.tex") == "a.tex")
         #expect(documentTitle("", path: nil) == "untitled.tex")
     }
-
-    @Test func relativeTimes() {
-        let now = Date(timeIntervalSince1970: 1_780_000_000)
-        #expect(when(now.addingTimeInterval(-20), now: now) == "Just now")
-        #expect(when(now.addingTimeInterval(-120), now: now) == "2 min ago")
-        #expect(when(now.addingTimeInterval(-3600), now: now) == "1 hour ago")
-        #expect(when(now.addingTimeInterval(-30 * 3600), now: now) == "Yesterday")
-        #expect(when(Date(timeIntervalSince1970: 1_754_222_400), now: now) == "3 Aug")
-    }
 }

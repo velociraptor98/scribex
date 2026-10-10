@@ -1,20 +1,5 @@
 import Foundation
 
-public let latexCommands = [
-    "documentclass", "usepackage", "begin", "end", "section", "subsection",
-    "subsubsection", "paragraph", "textbf", "textit", "texttt", "emph",
-    "label", "ref", "eqref", "cite", "footnote", "item", "caption",
-    "includegraphics", "frac", "sqrt", "sum", "int", "left", "right",
-    "alpha", "beta", "gamma", "delta", "theta", "lambda", "mu", "pi", "sigma",
-    "infty", "partial", "nabla", "cdot", "times", "leq", "geq", "neq", "approx",
-]
-
-public let latexEnvironments = [
-    "document", "equation", "equation*", "align", "align*", "gather",
-    "itemize", "enumerate", "description", "figure", "table", "tabular",
-    "center", "quote", "verbatim", "abstract", "theorem", "proof", "matrix",
-]
-
 public struct OutlineEntry: Hashable, Sendable {
     public var level: Int
     public var title: String
@@ -109,18 +94,6 @@ public struct DocStats: Hashable, Sendable {
 
 // Display maths only — inline $…$ is prose, not a numbered equation.
 nonisolated(unsafe) private let equationEnvs = #/\\begin\{(equation|align|gather|multline|eqnarray|displaymath)\*?\}/#
-nonisolated(unsafe) private let citeKeys = #/\\(?:cite|citep|citet|citeauthor|citeyear|parencite|textcite)\s*(?:\[[^\]]*\])*\{([^}]*)\}/#
-
-public func citedKeys(_ source: String) -> Set<String> {
-    var keys = Set<String>()
-    for m in source.matches(of: citeKeys) {
-        for k in m.1.split(separator: ",", omittingEmptySubsequences: false) {
-            let key = k.trimmingCharacters(in: .whitespaces)
-            if !key.isEmpty { keys.insert(key) }
-        }
-    }
-    return keys
-}
 
 public func stats(_ source: String) -> DocStats {
     DocStats(
@@ -132,12 +105,12 @@ public func stats(_ source: String) -> DocStats {
     )
 }
 
-public func bibKeys(_ bib: String) -> [String] {
-    bib.matches(of: #/@\w+\s*\{\s*([^,\s}]+)/#).map { String($0.1) }
-}
-
-public func bibliographyFiles(_ source: String) -> [String] {
-    source.matches(of: #/\\(?:bibliography|addbibresource)\s*\{([^}]+)\}/#)
-        .flatMap { $0.1.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } }
-        .map { $0.hasSuffix(".bib") ? $0 : "\($0).bib" }
+/// The document's \title, or its file name when it has none: how the welcome
+/// window lists it.
+public func documentTitle(_ source: String, path: String?) -> String {
+    if let m = source.firstMatch(of: #/\\title\s*\{([^}]+)\}/#) {
+        let title = m.1.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !title.isEmpty { return title }
+    }
+    return path.map { ($0 as NSString).lastPathComponent } ?? "untitled.tex"
 }
