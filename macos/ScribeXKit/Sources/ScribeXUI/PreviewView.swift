@@ -23,7 +23,12 @@ struct PreviewView: NSViewRepresentable {
         view.minScaleFactor = Session.minZoom
         view.maxScaleFactor = Session.maxZoom
         view.autoScales = true
+        // Since macOS 14 views do not clip their drawing by default; without
+        // this, the border of a page scrolled half out of view is drawn over
+        // the controls around the preview.
+        view.clipsToBounds = true
         let frames = PageFrames(frame: view.bounds)
+        frames.clipsToBounds = true
         frames.autoresizingMask = [.width, .height]
         view.addSubview(frames)
         context.coordinator.frames = frames

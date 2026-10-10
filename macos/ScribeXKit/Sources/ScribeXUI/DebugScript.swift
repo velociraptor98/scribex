@@ -92,6 +92,14 @@ public enum DebugScript {
                 } ?? []
                 print("menu \(top.title): " + items.joined(separator: " | "))
             }
+        case "scroll":
+            // Scroll every scroll view in the window (editor, preview, lists) by ARG points.
+            func scrollViews(_ v: NSView) -> [NSScrollView] { (v as? NSScrollView).map { [$0] } ?? [] + v.subviews.flatMap(scrollViews) }
+            for sv in front.map({ scrollViews($0.contentView!) }) ?? [] {
+                let clip = sv.contentView
+                clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: clip.bounds.origin.y + (Double(arg) ?? 400)))
+                sv.reflectScrolledClipView(clip)
+            }
         case "save": NSDocumentController.shared.documents.first?.save(nil)
         case "undo": NSDocumentController.shared.documents.first?.undoManager?.undo()
         case "quit": NSApp.terminate(nil)
