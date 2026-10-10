@@ -4,7 +4,7 @@ import SwiftUI
 
 /// ⌘E: choose the sheet and extras, then a save panel.
 struct ExportSheet: View {
-    @Environment(Session.self) private var model
+    let model: Session
     let pdf: Data
     let documentSheet: Sheet
     @State private var sheet: Sheet
@@ -13,7 +13,8 @@ struct ExportSheet: View {
     @State private var thumbs: [NSImage] = []
     @State private var pages = 0
 
-    init(pdf: Data, documentSheet: Sheet) {
+    init(model: Session, pdf: Data, documentSheet: Sheet) {
+        self.model = model
         self.pdf = pdf
         self.documentSheet = documentSheet
         _sheet = State(initialValue: documentSheet)
@@ -84,4 +85,8 @@ struct ExportSheet: View {
             return page.thumbnail(of: NSSize(width: 192 * bounds.width / bounds.height, height: 192), for: .mediaBox)
         }
     }
+}
+
+#Preview {
+    ExportSheet(model: .preview(), pdf: Data(), documentSheet: .a4)
 }

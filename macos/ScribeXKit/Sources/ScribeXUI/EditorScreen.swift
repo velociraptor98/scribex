@@ -3,18 +3,18 @@ import SwiftUI
 
 /// Contents · source · preview, with the press log along the foot.
 struct EditorScreen: View {
-    @Environment(Session.self) private var model
+    let model: Session
 
     var body: some View {
         VStack(spacing: 0) {
             SetupView(compact: true)
             banners
             HSplitView {
-                ContentsPane().frame(minWidth: 150, idealWidth: 190, maxWidth: 300)
+                ContentsPane(model: model).frame(minWidth: 150, idealWidth: 190, maxWidth: 300)
                 SourceEditor(model: model).frame(minWidth: 300)
-                PreviewPane().frame(minWidth: 320, idealWidth: 560)
+                PreviewPane(model: model).frame(minWidth: 320, idealWidth: 560)
             }
-            PressLogView()
+            PressLogView(model: model)
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
@@ -65,7 +65,7 @@ private struct Banner<Content: View>: View {
 }
 
 private struct ContentsPane: View {
-    @Environment(Session.self) private var model
+    let model: Session
 
     var body: some View {
         let sections = model.sections
@@ -100,7 +100,10 @@ private struct ContentsPane: View {
 }
 
 private struct PreviewPane: View {
-    @Environment(Session.self) private var model
+    let model: Session
+    /// Reported by the PDF view as it scrolls; nothing else needs them.
+    @State private var pages = 0
+    @State private var page = 1
 
     var body: some View {
         @Bindable var model = model
@@ -124,16 +127,16 @@ private struct PreviewPane: View {
             Group {
                 if model.rightPane == .proof {
                     PreviewView(preview: model.preview, zoom: model.zoom,
-                                onScale: { model.scale = $0 }, onPages: { model.pages = $0 }, onPage: { model.page = $0 })
+                                onScale: { model.scale = $0 }, onPages: { pages = $0 }, onPage: { page = $0 })
                         .overlay { if model.preview == nil { Text("Nothing built yet").italic().foregroundStyle(.secondary) } }
                 } else {
-                    MarksView()
+                    MarksView(model: model)
                 }
             }
             .frame(maxHeight: .infinity)
 
             HStack(spacing: 8) {
-                Text(model.pages > 0 ? "Page \(min(model.page, model.pages)) of \(model.pages)" : "No preview yet")
+                Text(pages > 0 ? "Page \(min(page, pages)) of \(pages)" : "No preview yet")
                 Spacer()
                 if model.rightPane == .proof { zoomControls }
                 Spacer()
@@ -163,4 +166,12 @@ private struct PreviewPane: View {
                 .help("Fit to width (⌘0)")
         }
     }
+}
+
+#Preview {
+    let session = Session.preview()
+    EditorScreen(model: session)
+        .environment(session.engine)
+        .scribeStyle()
+        .frame(width: 1280, height: 820)
 }

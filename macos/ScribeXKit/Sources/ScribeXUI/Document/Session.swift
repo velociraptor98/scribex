@@ -52,8 +52,6 @@ public final class Session {
     /// What "fit" resolves to on screen; zooming steps from here.
     var scale = 1.0
     var rightPane = RightPane.proof
-    var pages = 0
-    var page = 1
     var pressOpen = false
     var paletteOpen = false
     var exportOpen = false
@@ -326,6 +324,18 @@ public final class Session {
 extension Session {
     /// The last document window to appear, for the debug script.
     static weak var active: Session?
+
+    /// A window's worth of state for previews: the article plate, and any
+    /// issues to show. Nothing is typeset.
+    static func preview(issues: [Diagnostic] = []) -> Session {
+        let session = Session(document: TexDocument(), engine: .preview)
+        session.diags = issues
+        return session
+    }
+}
+
+extension Engine {
+    static let preview = Engine(worker: URL(filePath: "/usr/bin/false"))
 }
 #endif
 

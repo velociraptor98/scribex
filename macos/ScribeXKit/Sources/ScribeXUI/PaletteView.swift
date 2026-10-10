@@ -79,7 +79,7 @@ struct PaletteRow: Identifiable {
 /// ⌘K: describe a snippet in plain English, or name a command. A sheet over
 /// the document window.
 struct PaletteView: View {
-    @Environment(Session.self) private var model
+    let model: Session
     @State private var query = ""
     @State private var active: String?
     @FocusState private var focused: Bool
@@ -164,4 +164,8 @@ private struct PaletteItem: View {
         }
         .padding(.vertical, 4)
     }
+}
+
+#Preview {
+    PaletteView(model: .preview())
 }

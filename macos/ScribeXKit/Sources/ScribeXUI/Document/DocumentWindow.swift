@@ -17,16 +17,15 @@ public struct DocumentWindow: View {
 
     public var body: some View {
         @Bindable var session = session
-        EditorScreen()
+        EditorScreen(model: session)
             .frame(minWidth: 880, minHeight: 560)
             .scribeStyle()
-            .sheet(isPresented: $session.paletteOpen) { PaletteView() }
+            .sheet(isPresented: $session.paletteOpen) { PaletteView(model: session) }
             .sheet(isPresented: $session.exportOpen) {
                 if let preview = session.preview {
-                    ExportSheet(pdf: preview.data, documentSheet: sheetOf(session.source))
+                    ExportSheet(model: session, pdf: preview.data, documentSheet: sheetOf(session.source))
                 }
             }
-            .environment(session)
             .environment(session.engine)
             .focusedSceneValue(\.session, session)
             .onChange(of: fileURL) { _, url in session.fileURL = url }

@@ -190,3 +190,7 @@ private struct PlateSketch: View {
         }
     }
 }
+
+#Preview {
+    WelcomeView().environment(Engine.preview).frame(width: 1280, height: 820)
+}

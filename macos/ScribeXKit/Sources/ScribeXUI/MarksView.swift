@@ -3,14 +3,14 @@ import SwiftUI
 
 /// The Issues tab: what TeX complained about, in plain words, with fixes.
 struct MarksView: View {
-    @Environment(Session.self) private var model
+    let model: Session
 
     var body: some View {
         let diags = model.visible
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 ForEach(diags) { d in
-                    MarkRow(diagnostic: d)
+                    MarkRow(model: model, diagnostic: d)
                     Divider()
                 }
                 Text(diags.isEmpty
@@ -25,7 +25,7 @@ struct MarksView: View {
 }
 
 private struct MarkRow: View {
-    @Environment(Session.self) private var model
+    let model: Session
     let diagnostic: Diagnostic
 
     var body: some View {
@@ -69,7 +69,7 @@ private struct MarkRow: View {
 /// The strip along the window's foot: the last build in one line, opening
 /// into TeX's passes.
 struct PressLogView: View {
-    @Environment(Session.self) private var model
+    let model: Session
 
     var body: some View {
         @Bindable var model = model
@@ -98,4 +98,14 @@ struct PressLogView: View {
         .padding(.vertical, 10)
         .background(.bar)
     }
+}
+
+#Preview {
+    let issue = Diagnostic(
+        severity: .error, title: "Unknown command",
+        detail: "TeX does not recognise this command. Check the spelling, or load the package that defines it.",
+        raw: "Undefined control sequence.", line: 12,
+        fixes: [Fix(label: "Use \\emph", line: 12, find: "\\emhp", replace: "\\emph")]
+    )
+    MarksView(model: .preview(issues: [issue])).scribeStyle().frame(width: 520, height: 400)
 }

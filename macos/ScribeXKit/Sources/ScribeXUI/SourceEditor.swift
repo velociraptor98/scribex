@@ -106,20 +106,11 @@ struct SourceEditor: NSViewRepresentable {
             self.model = model
         }
 
-        /// SwiftUI's document does not count changes from its undo manager as
-        /// an AppKit document does, so the editor reports each one: that is
-        /// what the edited dot and autosave follow.
-        private func noteChange(in view: STTextView) {
-            guard let document = view.window?.windowController?.document as? NSDocument else { return }
-            let undo = document.undoManager
-            document.updateChangeCount(undo?.isUndoing == true ? .changeUndone : undo?.isRedoing == true ? .changeRedone : .changeDone)
-        }
-
-        /// The window's document, once there is a window: its change count is
-        /// what the edited dot and autosave follow. SwiftUI's environment
-        /// manager stands in until then.
+        /// The document's undo manager, from SwiftUI's environment. Edits
+        /// registered there are what the document system counts as changes,
+        /// so autosave, the edited state and ⌘Z all follow the editor.
         func undoManager(for textView: STTextView) -> UndoManager? {
-            (textView.window?.windowController?.document as? NSDocument)?.undoManager ?? undoManager
+            undoManager
         }
 
         func textView(_ textView: STTextView, shouldChangeTextIn affectedCharRange: NSTextRange, replacementString: String?) -> Bool {
@@ -138,7 +129,6 @@ struct SourceEditor: NSViewRepresentable {
             edited = nil
             if !view.isLoading {
                 model.edit(view.text ?? "")
-                noteChange(in: view)
                 view.completeIfTyping()
             }
         }
@@ -151,6 +141,14 @@ struct SourceEditor: NSViewRepresentable {
         }
 
         func textView(_ textView: STTextView, completionItemsAtLocation location: any NSTextLocation) -> [any STCompletionItem]? {
+            view?.completions()
+        }
+
+        /// STTextView asks for completions from a background task. Without
+        /// this async version the synchronous one above stands in for it and
+        /// runs off the main actor, which traps; being main-actor isolated,
+        /// this one is called with a hop back to the main thread.
+        func textView(_ textView: STTextView, completionItemsAtLocation location: any NSTextLocation) async -> [any STCompletionItem]? {
             view?.completions()
         }
 

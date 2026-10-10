@@ -10,7 +10,7 @@ import SwiftUI
 ///     SCRIBEX_DEBUG_OUT=/tmp/shots ScribeX.app/Contents/MacOS/ScribeX
 ///
 /// Steps: `snap NAME`, `wait SECONDS`, `size WIDTH HEIGHT`, `new`, `open PATH`,
-/// `palette TEXT`, `close`, `export`, `marks`, `type TEXT`, `press`, `page NAME`,
+/// `palette TEXT`, `close`, `export`, `marks`, `type TEXT`, `key TEXT`, `press`, `page NAME`,
 /// `fetch`, `essentials`, `network`, `save`, `undo`, `state LABEL`, `quit`.
 public enum DebugScript {
     public static func runIfRequested() {
@@ -66,7 +66,20 @@ public enum DebugScript {
         case "essentials": session?.setUp()
         case "network": session?.toggleOffline()
         case "state":
-            print("debug state [\(arg)]: status=\(session?.status ?? "-") busy=\(session?.busy ?? false) windows=\(NSApp.windows.filter(\.isVisible).map { "\($0.title) edited=\($0.isDocumentEdited)" })")
+            print("debug state [\(arg)]: text=\(session?.source.prefix(25).debugDescription ?? "-") key=\(NSApp.keyWindow?.title ?? "-") fr=\(String(describing: type(of: NSApp.keyWindow?.firstResponder as Any))) status=\(session?.status ?? "-") busy=\(session?.busy ?? false) windows=\(NSApp.windows.filter(\.isVisible).map { "\($0.title) edited=\($0.isDocumentEdited)" })")
+        case "key":
+            // Real key events through the window, as typing would send them.
+            guard let window = front else { break }
+            session?.editor.focus()
+            for ch in arg {
+                for type in [NSEvent.EventType.keyDown, .keyUp] {
+                    if let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                                    windowNumber: window.windowNumber, context: nil, characters: String(ch),
+                                                    charactersIgnoringModifiers: String(ch), isARepeat: false, keyCode: 0) {
+                        window.sendEvent(event)
+                    }
+                }
+            }
         case "save": NSDocumentController.shared.documents.first?.save(nil)
         case "undo": NSDocumentController.shared.documents.first?.undoManager?.undo()
         case "quit": NSApp.terminate(nil)
