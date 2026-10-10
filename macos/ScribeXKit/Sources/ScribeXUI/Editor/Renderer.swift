@@ -21,7 +21,7 @@ struct Zoom: Equatable {
     }
 }
 
-/// The typeset pages, under one line with the build status, zoom and Export.
+/// The typeset pages, under one line with zoom and Export.
 struct Renderer: View {
     let model: Session
     @Binding var zoom: Zoom
@@ -31,13 +31,6 @@ struct Renderer: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Text("Preview").smallCaps()
-                Text(model.status)
-                    .font(Fonts.text(11.5)).foregroundStyle(.secondary)
-                    .lineLimit(1).truncationMode(.tail)
-                    .opacity(model.busy ? 0.6 : 1)
-                    .help(model.status)
-                    // The first thing to give way when the column is narrow.
-                    .layoutPriority(-1)
                 Spacer(minLength: 0)
                 zoomControls
                 Button("Export PDF…", action: export)

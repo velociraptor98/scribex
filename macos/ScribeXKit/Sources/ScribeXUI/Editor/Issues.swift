@@ -1,8 +1,8 @@
 import ScribeXCore
 import SwiftUI
 
-/// A drawer over the foot of the preview: one line with the count, which
-/// opens upward into what TeX complained about, in plain words, with fixes.
+/// A drawer over the foot of the preview: one line with the count and the
+/// build's status, which opens upward into what TeX complained about, in plain words, with fixes.
 /// It lies on top of the pages rather than beside them, so opening it never
 /// resizes the PDF.
 struct Issues: View {
@@ -23,6 +23,12 @@ struct Issues: View {
                         .rotationEffect(.degrees(isExpanded ? 180 : 0))
                     Text(summary(diags)).smallCaps()
                     Spacer()
+                    // Warnings still build, so the outcome is not implied by the count.
+                    Text(model.status)
+                        .font(Fonts.text(11.5)).foregroundStyle(.secondary).monospacedDigit()
+                        .lineLimit(1).truncationMode(.tail)
+                        .opacity(model.busy ? 0.6 : 1)
+                        .help(model.status)
                 }
                 .padding(.horizontal, 16)
                 .frame(height: 34)
