@@ -18,7 +18,7 @@ enum DocumentSheet: Identifiable {
 /// issues accordion beneath the preview. `DocumentGroup` makes one per open
 /// document and supplies the title, proxy icon, edited dot and save prompts.
 ///
-/// Contents and preview can be closed, the issues folded, and the splits resize them. The
+/// Contents and preview can be closed, the issues folded, and the split resizes them. The
 /// window's own state (panels, zoom, the open sheet) lives here, the nearest
 /// view its parts share, and reaches the menu bar through focus.
 public struct DocumentView: View {
@@ -42,22 +42,20 @@ public struct DocumentView: View {
             banners
             HSplitView {
                 if panels.contents {
-                    Contents(model: session, isOpen: $panels.contents).frame(minWidth: 150, idealWidth: 190, maxWidth: 300)
+                    Contents(model: session).frame(minWidth: 150, idealWidth: 190, maxWidth: 300)
                 }
                 Editor(model: session).frame(minWidth: 300)
-                if panels.preview || panels.issues {
-                    VSplitView {
-                        if panels.preview {
-                            Renderer(model: session, zoom: $zoom) { sheet = .export }.frame(minHeight: 240)
+                if panels.preview {
+                    Renderer(model: session, zoom: $zoom) { sheet = .export }
+                        .overlay(alignment: .bottom) {
+                            // Capped only when open: a max frame takes the whole height
+                            // it allows, which would lift the folded header off the foot.
+                            Issues(model: session, isExpanded: $panels.issues)
+                                .frame(maxHeight: panels.issues ? 320 : nil)
                         }
-                        // Always there as a header. Expanded, it opens at its minimum
-                        // (the split ignores the ideal), so that is set to fit an issue.
-                        Issues(model: session, isExpanded: $panels.issues)
-                            .frame(minHeight: panels.issues ? 220 : Issues.headerHeight,
-                                   idealHeight: panels.issues ? 220 : Issues.headerHeight,
-                                   maxHeight: panels.issues ? .infinity : Issues.headerHeight)
-                    }
-                    .frame(minWidth: 320, idealWidth: 560)
+                        .frame(minWidth: 320, idealWidth: 560)
+                } else if panels.issues {
+                    Issues(model: session, isExpanded: $panels.issues).frame(minWidth: 320, idealWidth: 560)
                 }
             }
         }

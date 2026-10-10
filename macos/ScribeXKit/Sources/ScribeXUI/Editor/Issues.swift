@@ -1,12 +1,11 @@
 import ScribeXCore
 import SwiftUI
 
-/// A drawer under the preview: one line with the count, which stays at the
-/// foot and opens upward into what TeX complained about, in plain words, with
-/// fixes.
+/// A drawer over the foot of the preview: one line with the count, which
+/// opens upward into what TeX complained about, in plain words, with fixes.
+/// It lies on top of the pages rather than beside them, so opening it never
+/// resizes the PDF.
 struct Issues: View {
-    static let headerHeight: CGFloat = 34
-
     let model: Session
     @Binding var isExpanded: Bool
 
@@ -26,12 +25,15 @@ struct Issues: View {
                     Spacer()
                 }
                 .padding(.horizontal, 16)
-                .frame(height: Self.headerHeight)
+                .frame(height: 34)
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
             .help(isExpanded ? "Hide the issues (⇧⌘M)" : "Show the issues (⇧⌘M)")
         }
+        .background(.canvas)
+        .overlay(alignment: .top) { Divider() }
+        .shadow(color: .black.opacity(isExpanded ? 0.3 : 0), radius: 12, y: -4)
     }
 
     private func summary(_ diags: [Diagnostic]) -> String {

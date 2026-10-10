@@ -21,42 +21,35 @@ struct Zoom: Equatable {
     }
 }
 
-/// The typeset pages: Export above, page count, zoom and build status below.
+/// The typeset pages, under one line with the build status, zoom and Export.
 struct Renderer: View {
     let model: Session
     @Binding var zoom: Zoom
     var export: () -> Void
-    /// Reported by the PDF view as it scrolls; nothing else needs them.
-    @State private var pages = 0
-    @State private var page = 1
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
+            HStack(spacing: 12) {
                 Text("Preview").smallCaps()
-                Spacer()
+                Text(model.status)
+                    .font(Fonts.text(11.5)).foregroundStyle(.secondary)
+                    .lineLimit(1).truncationMode(.tail)
+                    .opacity(model.busy ? 0.6 : 1)
+                    .help(model.status)
+                    // The first thing to give way when the column is narrow.
+                    .layoutPriority(-1)
+                Spacer(minLength: 0)
+                zoomControls
                 Button("Export PDF…", action: export)
                     .disabled(model.preview == nil || model.busy)
             }
+            .controlSize(.small)
+            .monospacedDigit()
             .padding(12)
 
-            PreviewView(preview: model.preview, zoom: zoom,
-                        onScale: { zoom.scale = $0 }, onPages: { pages = $0 }, onPage: { page = $0 })
+            PreviewView(preview: model.preview, zoom: zoom, onScale: { zoom.scale = $0 })
                 .overlay { if model.preview == nil { Text("Nothing built yet").italic().foregroundStyle(.secondary) } }
                 .frame(maxHeight: .infinity)
-
-            HStack(spacing: 8) {
-                Text(pages > 0 ? "Page \(min(page, pages)) of \(pages)" : "No preview yet")
-                Spacer()
-                zoomControls
-                Spacer()
-                Text(model.status).lineLimit(1).opacity(model.busy ? 0.6 : 1)
-            }
-            .font(Fonts.text(11.5))
-            .foregroundStyle(.secondary)
-            .monospacedDigit()
-            .controlSize(.small)
-            .padding(12)
         }
         .background(.sunken)
     }
@@ -70,11 +63,13 @@ struct Renderer: View {
             .fixedSize()
             Button("\(Int((zoom.scale * 100).rounded()))%") { zoom = Zoom(fit: false, scale: 1) }
                 .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
                 .help("Actual size")
             Toggle("Fit", isOn: $zoom.fit)
                 .toggleStyle(.button)
                 .help("Fit to width (⌘0)")
         }
+        .fixedSize()
     }
 }
 
@@ -83,8 +78,6 @@ private struct PreviewView: NSViewRepresentable {
     var preview: Session.Preview?
     var zoom: Zoom
     var onScale: (Double) -> Void
-    var onPages: (Int) -> Void
-    var onPage: (Int) -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -120,13 +113,6 @@ private struct PreviewView: NSViewRepresentable {
                     context.coordinator.frames?.needsDisplay = true
                 }
             },
-
-            center.addObserver(forName: .PDFViewPageChanged, object: view, queue: .main) { [weak view] _ in
-                MainActor.assumeIsolated {
-                    guard let view, let page = view.currentPage, let doc = view.document else { return }
-                    context.coordinator.onPage?(doc.index(for: page) + 1)
-                }
-            },
         ]
         return view
     }
@@ -134,12 +120,10 @@ private struct PreviewView: NSViewRepresentable {
     func updateNSView(_ view: PDFView, context: Context) {
         let c = context.coordinator
         c.onScale = onScale
-        c.onPage = onPage
 
         if preview?.id != c.shown {
             c.shown = preview?.id
             swap(in: preview?.document, on: view)
-            onPages(preview?.document.pageCount ?? 0)
             c.followScrolling(of: view)
             c.frames?.needsDisplay = true
         }
@@ -186,7 +170,6 @@ private struct PreviewView: NSViewRepresentable {
     final class Coordinator {
         var shown: Int?
         var onScale: ((Double) -> Void)?
-        var onPage: ((Int) -> Void)?
         var observers: [any NSObjectProtocol] = []
         weak var frames: PageFrames?
         private weak var clip: NSClipView?

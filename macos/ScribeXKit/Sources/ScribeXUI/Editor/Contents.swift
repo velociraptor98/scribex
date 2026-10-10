@@ -4,7 +4,6 @@ import SwiftUI
 /// The document's headings, each a jump to its line, with a tally beneath.
 struct Contents: View {
     let model: Session
-    @Binding var isOpen: Bool
 
     var body: some View {
         let sections = model.sections
@@ -14,15 +13,7 @@ struct Contents: View {
         let tally = model.tally
 
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("Contents").smallCaps()
-                Spacer()
-                Button("Close", systemImage: "xmark") { isOpen = false }
-                    .buttonStyle(.borderless)
-                    .labelStyle(.iconOnly)
-                    .help("Hide the contents (⌃⌘S)")
-            }
-            .padding(16)
+            Text("Contents").smallCaps().padding(16)
             List(sections.indices, id: \.self) { i in
                 let entry = sections[i]
                 Button { model.editor.goto(entry.line) } label: {
@@ -47,5 +38,5 @@ struct Contents: View {
 }
 
 #Preview {
-    Contents(model: .preview(), isOpen: .constant(true)).scribeStyle().frame(width: 200, height: 600)
+    Contents(model: .preview()).scribeStyle().frame(width: 200, height: 600)
 }
