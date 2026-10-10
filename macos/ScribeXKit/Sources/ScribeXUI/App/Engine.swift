@@ -101,7 +101,12 @@ public final class Engine {
 
 #if DEBUG
 extension Engine {
-    /// For previews: never typesets, since its worker is /usr/bin/false.
-    static let preview = Engine(worker: URL(filePath: "/usr/bin/false"))
+    /// An engine held in one setup state, for previews.
+    static func preview(_ cache: CacheState, files: Int = 0, error: String? = nil) -> Engine {
+        let engine = Engine(worker: URL(filePath: "/usr/bin/false"))
+        engine.cache = cache
+        engine.setup = SetupProgress(files: files, current: files > 0 ? "lmodern.sty" : nil, error: error)
+        return engine
+    }
 }
 #endif

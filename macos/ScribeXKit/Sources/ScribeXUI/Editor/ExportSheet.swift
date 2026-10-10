@@ -88,3 +88,12 @@ struct ExportSheet: View {
         }
     }
 }
+
+#Preview {
+    // A blank A4 page, so the thumbnail and size show as they would.
+    let page = PDFPage()
+    page.setBounds(CGRect(x: 0, y: 0, width: 595, height: 842), for: .mediaBox)
+    let pdf = PDFDocument()
+    pdf.insert(page, at: 0)
+    return ExportSheet(model: .preview(), pdf: pdf.dataRepresentation() ?? Data(), documentSheet: .a4)
+}

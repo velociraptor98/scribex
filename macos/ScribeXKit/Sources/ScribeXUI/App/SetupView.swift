@@ -80,3 +80,21 @@ struct SetupView: View {
         .background(Color.gilt.opacity(0.12))
     }
 }
+
+#Preview("Card") {
+    VStack(spacing: 24) {
+        SetupView(compact: false).environment(Engine.preview(.cold))
+        SetupView(compact: false).environment(Engine.preview(.downloading, files: 180))
+        SetupView(compact: false).environment(Engine.preview(.failed, error: "The network connection was lost."))
+    }
+    .frame(width: 472).padding(40).scribeStyle()
+}
+
+#Preview("Banner") {
+    VStack(spacing: 0) {
+        SetupView(compact: true).environment(Engine.preview(.cold))
+        SetupView(compact: true).environment(Engine.preview(.downloading, files: 180))
+        SetupView(compact: true).environment(Engine.preview(.failed, error: "The network connection was lost."))
+    }
+    .frame(width: 900).scribeStyle()
+}

@@ -16,3 +16,7 @@ struct Identity: View {
         .accessibilityElement(children: .combine)
     }
 }
+
+#Preview {
+    Identity().padding(40).scribeStyle()
+}

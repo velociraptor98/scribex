@@ -528,3 +528,8 @@ struct LineNoteView: View {
             : "Not part of the TeX distribution: put it in the same folder as the document.")
     }
 }
+
+#Preview {
+    // The article template, coloured; typing and completion work in the canvas.
+    Editor(model: .preview()).scribeStyle().frame(width: 640, height: 600)
+}
