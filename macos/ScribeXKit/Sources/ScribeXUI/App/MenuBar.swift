@@ -26,7 +26,11 @@ public struct MenuBar: Commands {
             items(commands, in: .file)
         }
         CommandMenu("Format") { items(commands, in: .format) }
-        CommandMenu("Build") { items(commands, in: .build) }
+        CommandMenu("Build") {
+            items(commands, in: .build)
+            Divider()
+            items(commands, in: .setup)
+        }
         CommandGroup(before: .toolbar) {
             items(commands, in: .view)
             Divider()

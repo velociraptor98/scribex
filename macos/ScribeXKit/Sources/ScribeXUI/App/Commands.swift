@@ -4,14 +4,31 @@ import SwiftUI
 
 /// Something ScribeX can do, defined once for the menu bar and the ⌘K palette.
 struct Command: Identifiable {
-    enum Menu { case file, format, build, view }
+    /// Its group: where it sits in the menu bar, and the heading it comes
+    /// under in the palette, in this order.
+    enum Menu: CaseIterable {
+        case file, format, build, view
+        /// One-off downloads, at the foot of the Build menu and the palette.
+        case setup
+
+        var title: String {
+            switch self {
+            case .file: "File"
+            case .format: "Format"
+            case .build: "Build"
+            case .view: "View"
+            case .setup: "Setup"
+            }
+        }
+    }
 
     let id: String
     let title: String
     var keys: KeyboardShortcut?
     /// Extra words the palette matches on, beyond the title.
     var words: [String] = []
-    /// Where it sits in the menu bar; nil for what macOS already provides there.
+    /// Where it sits in the menu bar; nil for what macOS already provides
+    /// there, which the palette lists under File.
     var menu: Menu?
     var inPalette = true
     /// Set for an on/off setting, shown with a checkmark in the menu.
@@ -59,7 +76,7 @@ struct Command: Identifiable {
             Command(id: "live", title: "Build As I Type", words: ["live", "auto", "rebuild"], menu: .build,
                     isOn: session?.autoBuild ?? false, isEnabled: open) { session?.autoBuild.toggle() },
             Command(id: "prime", title: "Download the LaTeX Essentials", words: ["cache", "offline", "network", "download", "packages", "fonts", "setup"],
-                    menu: .build, isEnabled: engine.cache != .downloading) { engine.setUp() },
+                    menu: .setup, isEnabled: engine.cache != .downloading) { engine.setUp() },
 
             // View.
             Command(id: "palette", title: "Command Palette…", keys: KeyboardShortcut("k"), menu: .view, inPalette: false,
