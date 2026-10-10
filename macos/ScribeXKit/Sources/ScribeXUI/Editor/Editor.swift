@@ -64,9 +64,9 @@ public final class EditorHandle {
 
 struct Editor: NSViewRepresentable {
     var model: Session
-    /// Space above the first line, so it lines up with the first row of the
-    /// panes beside it.
-    var topInset: CGFloat = 34
+    /// Room around the text: above the first line, so it lines up with the
+    /// first row of the panes beside it, and clear of the bottom and right.
+    private static let insets = NSEdgeInsets(top: 34, left: 0, bottom: 40, right: 30)
 
     func makeCoordinator() -> Coordinator {
         Coordinator(model: model)
@@ -77,7 +77,11 @@ struct Editor: NSViewRepresentable {
         scroll.hasHorizontalScroller = false
         scroll.scrollerStyle = .overlay
         scroll.automaticallyAdjustsContentInsets = false
-        scroll.contentInsets = NSEdgeInsets(top: topInset, left: 0, bottom: 40, right: 30)
+        scroll.contentInsets = Self.insets
+        // The scroller sits inside the content insets, which are only there to
+        // pad the text; undone, it runs the full height at the window's edge.
+        let i = Self.insets
+        scroll.scrollerInsets = NSEdgeInsets(top: -i.top, left: -i.left, bottom: -i.bottom, right: -i.right)
         scroll.backgroundColor = NSColor.scribeEditor
         scroll.drawsBackground = true
 
@@ -96,9 +100,6 @@ struct Editor: NSViewRepresentable {
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         context.coordinator.undoManager = context.environment.undoManager
-        if scroll.contentInsets.top != topInset {
-            scroll.contentInsets.top = topInset
-        }
         let view = scroll.documentView as! LatexTextView
         if let note = model.missingFile {
             let host = context.coordinator.noteHost ?? NSHostingView(rootView: LineNote(note: note, session: model))
