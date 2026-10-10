@@ -152,7 +152,8 @@ no Screen Recording permission; see `DebugScript.swift`.
 | `macos/ScribeXKit/Sources/ScribeXCore/Typesetter.swift` | Runs builds in the worker, one at a time; first-run download |
 | `macos/ScribeXKit/Sources/ScribeXCore/DocumentFiles.swift` | Export, and the source written alongside an export |
 | `macos/ScribeXKit/Sources/ScribeXCore/TexLog.swift` | Parses the TeX log into issues and the press log |
-| `macos/ScribeXKit/Sources/ScribeXCore/Latex.swift` | Outline, document counts, bibliography keys |
+| `macos/ScribeXKit/Sources/ScribeXCore/Latex/Latex.swift` | Outline, document counts, bibliography keys |
+| `macos/ScribeXKit/Sources/ScribeXCore/Latex/LatexSyntax.swift` | Tokens for syntax highlighting, line by line |
 | `macos/ScribeXKit/Sources/ScribeXCore/Snippets.swift` | Plain-English → LaTeX snippet matcher |
 | `macos/ScribeXKit/Sources/ScribeXUI/Document/TexDocument.swift` | The .tex document type; the document system does the file handling |
 | `macos/ScribeXKit/Sources/ScribeXUI/Document/Engine.swift` | Shared by all windows: the typesetter, download cache, offline switch |
