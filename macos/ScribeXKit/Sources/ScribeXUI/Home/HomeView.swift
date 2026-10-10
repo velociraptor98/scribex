@@ -120,6 +120,8 @@ private struct RecentList: View {
             }
         }
         .padding(.top, 64)
+        // Full width even when empty, so the heading sits where the list would.
+        .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear {
             recents = NSDocumentController.shared.recentDocumentURLs
             selection = recents.first
