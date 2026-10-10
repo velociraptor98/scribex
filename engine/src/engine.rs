@@ -6,7 +6,7 @@
 //! process outright. Upstream's CLI never trips over this because it runs one
 //! process per document; we do the same. See `worker.rs`.
 //!
-//! `only_cached` is the offline switch: when true the bundle refuses all network
+//! `only_cached` keeps a build offline: when true the bundle refuses all network
 //! access and any resource missing from the local cache fails the build.
 
 use std::io::Write;

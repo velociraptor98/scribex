@@ -2,8 +2,8 @@ import Foundation
 import Observation
 import ScribeXCore
 
-/// What every window shares: the typesetter, the download cache it reads, and
-/// the offline switch. One per app.
+/// What every window shares: the typesetter and the download cache it reads.
+/// One per app.
 @Observable
 public final class Engine {
     public enum CacheState { case unknown, cold, downloading, failed, ready }
@@ -16,7 +16,6 @@ public final class Engine {
 
     private(set) var cache = CacheState.unknown
     private(set) var setup = SetupProgress()
-    private(set) var offline = true
     /// Packages and fonts arriving right now, for the title bar.
     private(set) var fetched: [String] = []
 
@@ -41,10 +40,6 @@ public final class Engine {
         }
         return Bundle.main.url(forAuxiliaryExecutable: "scribex-typeset")
             ?? Bundle.main.bundleURL.appending(path: "Contents/MacOS/scribex-typeset")
-    }
-
-    func toggleOffline() {
-        offline.toggle()
     }
 
     /// Where an untitled document builds: its own folder, so two untitled

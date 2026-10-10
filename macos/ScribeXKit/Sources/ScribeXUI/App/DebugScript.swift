@@ -11,7 +11,7 @@ import SwiftUI
 ///
 /// Steps: `snap NAME`, `wait SECONDS`, `size WIDTH HEIGHT`, `fullscreen`, `new`, `open PATH`,
 /// `run COMMAND-ID`, `palette TEXT`, `close`, `type TEXT`, `key TEXT`, `page NAME`, `fetch`,
-/// `essentials`, `network`, `save`, `undo`, `menus`, `state LABEL`, `quit`. `run` takes an
+/// `essentials`, `save`, `undo`, `menus`, `state LABEL`, `quit`. `run` takes an
 /// id from `Command.all`, e.g. `run issues`.
 public enum DebugScript {
     public static func runIfRequested() {
@@ -86,7 +86,6 @@ public enum DebugScript {
             }
         case "fetch": session?.build(allowNetwork: true)
         case "essentials": session?.setUp()
-        case "network": session?.toggleOffline()
         case "state":
             print("debug state [\(arg)]: text=\(session?.source.prefix(25).debugDescription ?? "-") key=\(NSApp.keyWindow?.title ?? "-") fr=\(String(describing: type(of: NSApp.keyWindow?.firstResponder as Any))) status=\(session?.status ?? "-") busy=\(session?.busy ?? false) windows=\(NSApp.windows.filter(\.isVisible).map { "\($0.title) edited=\($0.isDocumentEdited) full=\($0.styleMask.contains(.fullScreen)) size=\(Int($0.frame.width))x\(Int($0.frame.height))" })")
         case "key":

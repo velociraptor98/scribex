@@ -86,13 +86,6 @@ public struct DocumentView: View {
                     ProgressView().controlSize(.small)
                     Text("Downloading \(last)").font(Fonts.text(11.5)).foregroundStyle(.secondary)
                 }
-                // A button, not a toggle: a toolbar toggle that is on draws as a
-                // white disc, and offline is the normal state.
-                Button(action: session.toggleOffline) {
-                    Label(session.offline ? "Offline" : "Network", systemImage: session.offline ? "wifi.slash" : "wifi")
-                        .labelStyle(.titleAndIcon)
-                }
-                .help(session.offline ? "The engine refuses all network access" : "The engine may fetch missing resources")
             }
             // Status rather than an action, so no glass capsule behind it.
             .sharedBackgroundVisibility(.hidden)

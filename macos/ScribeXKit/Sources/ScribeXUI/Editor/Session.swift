@@ -60,9 +60,7 @@ public final class Session {
     var visible: [Diagnostic] { diags.filter { !ignored.contains($0.key) } }
 
     // Shared state, reached through the session so views need only one model.
-    var offline: Bool { engine.offline }
     var fetched: [String] { engine.fetched }
-    func toggleOffline() { engine.toggleOffline() }
     func setUp() { engine.setUp() }
 
     // MARK: Editing
@@ -136,8 +134,8 @@ public final class Session {
 
     // MARK: Building
 
-    /// `allowNetwork` overrides the offline switch for this one build, for
-    /// "fetch it".
+    /// Builds never use the network, except this one when `allowNetwork` is
+    /// set: "Fetch it", the user's explicit go-ahead for a missing package.
     func build(allowNetwork: Bool = false) {
         pendingBuild?.cancel()
         let src = source
@@ -171,10 +169,8 @@ public final class Session {
             let r = try await engine.typesetter.typeset(
                 entry: target,
                 source: src,
-                onlyCached: allowNetwork ? false : engine.offline,
-                // Only the explicit per-build override counts as a fetch the user
-                // asked for. Leaving the offline switch off does not, or every
-                // keystroke would queue an undroppable build.
+                onlyCached: !allowNetwork,
+                // A fetch fills the shared cache, so it runs even once superseded.
                 ifSuperseded: allowNetwork ? .run : .drop,
                 onFetch: engine.fetchHandler
             )
@@ -262,7 +258,7 @@ public final class Session {
                     let variant = try await engine.typesetter.typeset(
                         entry: target,
                         source: options.apply(to: source),
-                        onlyCached: engine.offline,
+                        onlyCached: true,
                         ifSuperseded: .run,
                         onFetch: engine.fetchHandler
                     )

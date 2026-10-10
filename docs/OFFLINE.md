@@ -11,8 +11,12 @@ Tectonic ships engines, not content. Packages (`.sty`), fonts, and format files
 come from a *bundle* — normally fetched over the network on first use and cached
 under `~/Library/Caches/TectonicProject.Tectonic` (macOS).
 
-With the **Offline** toggle on (the default), the bundle refuses all network
-access. Anything not already cached fails the build. Measured on a cold cache:
+Builds are always offline: the bundle refuses all network access, and anything
+not already cached fails the build. The network is used only when the user asks:
+the first-run download, and **Fetch it** on the banner a missing package
+raises. There is no setting for it. Leaving builds online would gain only an
+automatic download for something one click fetches, at the price of network
+access the user did not ask for. Measured on a cold cache:
 
 | Document | Offline | Result |
 |---|---|---|
@@ -54,8 +58,8 @@ The download (`Typesetter.warmUp`) builds `WARMUP` and then each template with t
 network allowed, so every document the app offers works offline afterwards.
 On success it writes a `cache-ready` marker in the app data directory; the
 start screen offers the download for as long as that marker is absent. It is
-one click rather than automatic, because the offline toggle promises no
-network access the user did not ask for.
+one click rather than automatic, because builds promise no network access the
+user did not ask for.
 
 Measured from an empty cache (September 2026):
 

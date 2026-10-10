@@ -58,9 +58,7 @@ struct Command: Identifiable {
                     menu: .build, isEnabled: open && session?.busy == false) { session?.build() },
             Command(id: "live", title: "Build As I Type", words: ["live", "auto", "rebuild"], menu: .build,
                     isOn: session?.autoBuild ?? false, isEnabled: open) { session?.autoBuild.toggle() },
-            Command(id: "offline", title: "Offline", words: ["network", "online", "cache", "download"], menu: .build,
-                    isOn: engine.offline) { engine.toggleOffline() },
-            Command(id: "prime", title: "Download the LaTeX Essentials", words: ["cache", "offline", "packages", "fonts", "setup"],
+            Command(id: "prime", title: "Download the LaTeX Essentials", words: ["cache", "offline", "network", "download", "packages", "fonts", "setup"],
                     menu: .build, isEnabled: engine.cache != .downloading) { engine.setUp() },
 
             // View.
