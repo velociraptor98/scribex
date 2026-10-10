@@ -41,6 +41,7 @@ public enum DebugScript {
         case "size":
             let wh = arg.split(separator: " ").compactMap { Double($0) }
             if wh.count == 2 { front?.setContentSize(NSSize(width: wh[0], height: wh[1])) }
+        case "fullscreen": front?.toggleFullScreen(nil)
         case "new": NSDocumentController.shared.newDocument(nil)
         case "open":
             _ = try? await NSDocumentController.shared.openDocument(withContentsOf: URL(filePath: arg), display: true)
@@ -66,7 +67,7 @@ public enum DebugScript {
         case "essentials": session?.setUp()
         case "network": session?.toggleOffline()
         case "state":
-            print("debug state [\(arg)]: text=\(session?.source.prefix(25).debugDescription ?? "-") key=\(NSApp.keyWindow?.title ?? "-") fr=\(String(describing: type(of: NSApp.keyWindow?.firstResponder as Any))) status=\(session?.status ?? "-") busy=\(session?.busy ?? false) windows=\(NSApp.windows.filter(\.isVisible).map { "\($0.title) edited=\($0.isDocumentEdited)" })")
+            print("debug state [\(arg)]: text=\(session?.source.prefix(25).debugDescription ?? "-") key=\(NSApp.keyWindow?.title ?? "-") fr=\(String(describing: type(of: NSApp.keyWindow?.firstResponder as Any))) status=\(session?.status ?? "-") busy=\(session?.busy ?? false) windows=\(NSApp.windows.filter(\.isVisible).map { "\($0.title) edited=\($0.isDocumentEdited) full=\($0.styleMask.contains(.fullScreen)) size=\(Int($0.frame.width))x\(Int($0.frame.height))" })")
         case "key":
             // Real key events through the window, as typing would send them.
             guard let window = front else { break }

@@ -37,8 +37,35 @@ public struct DocumentWindow: View {
                 Session.active = session
                 #endif
                 session.scheduleBuild()
-                // A document is open; the welcome window has done its job.
-                dismissWindow(id: HomeView.windowID)
             }
+            .background(WindowProbe { window in
+                // A document is open; the welcome window has done its job.
+                // If it was full screen, this window takes its place there.
+                let home = NSApp.windows.first { $0.identifier?.rawValue.hasPrefix(HomeView.windowID) == true }
+                if home?.styleMask.contains(.fullScreen) == true, !window.styleMask.contains(.fullScreen) {
+                    DispatchQueue.main.async { window.toggleFullScreen(nil) }
+                }
+                dismissWindow(id: HomeView.windowID)
+            })
     }
+}
+
+/// Hands over the window the view lands in, for what SwiftUI can't do: enter full screen.
+private struct WindowProbe: NSViewRepresentable {
+    let found: (NSWindow) -> Void
+
+    final class Probe: NSView {
+        var found: ((NSWindow) -> Void)?
+        override func viewDidMoveToWindow() {
+            if let window { found?(window); found = nil }
+        }
+    }
+
+    func makeNSView(context: Context) -> Probe {
+        let probe = Probe()
+        probe.found = found
+        return probe
+    }
+
+    func updateNSView(_ probe: Probe, context: Context) {}
 }
