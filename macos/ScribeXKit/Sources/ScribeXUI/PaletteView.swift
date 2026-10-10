@@ -50,15 +50,10 @@ struct PaletteRow: Identifiable {
             return cmds.map { PaletteRow(id: $0.id, title: $0.title, hint: $0.hint, score: 1, command: $0) }
         }
 
-        // Same tokenizer as the snippet matcher, so filler words ("a", "put",
-        // "here") cannot drag in every command that happens to contain the letter.
-        let words = tokenize(q)
+        // Matched the same way as snippets.
+        let words = queryWords(q)
         let scored: [PaletteRow] = cmds.compactMap { c in
-            let hay = tokenize(([c.title] + c.words).joined(separator: " "))
-            // Match whole words or their prefixes, never substrings — otherwise
-            // "as" finds "Save as…" by way of the middle of a word.
-            let hits = words.filter { w in hay.contains { $0.hasPrefix(w) || w.hasPrefix($0) } }.count
-            let score = words.isEmpty ? 0 : Double(hits) / Double(words.count)
+            let score = relevance(of: words, to: [c.title] + c.words)
             guard score > 0 else { return nil }
             // Commands and snippets share a scale; an exact command match should
             // outrank a loose snippet match, but never a precise one.

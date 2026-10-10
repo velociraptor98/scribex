@@ -1,5 +1,5 @@
-// Matching is a local keyword score, so the vocabulary below does the work:
-// synonyms matter more here than clever ranking.
+// Matching is plain text search over each intent's keywords, so the vocabulary
+// below does the work: synonyms matter more here than clever ranking.
 
 import Foundation
 
@@ -170,41 +170,25 @@ private let wrappers: [Intent] = [
     },
 ]
 
-// Filler that would otherwise match everything.
-private let stopWords: Set<String> = [
-    "the", "and", "for", "with", "put", "add", "insert", "make", "give", "get",
-    "here", "there", "this", "that", "please", "can", "you", "would", "like",
-    "want", "need", "some", "into", "onto", "new", "one",
-]
-
-public func tokenize(_ s: String) -> [String] {
-    s.lowercased()
-        .split(whereSeparator: { !($0.isASCII && ($0.isLetter || $0.isNumber)) })
-        .map(String.init)
-        .filter { $0.count > 1 && !stopWords.contains($0) }
+/// The words of a query worth matching: letters only, so numbers (which
+/// become sizes) drop out, and three letters or more, so filler such as "a",
+/// "by" and "of" cannot match inside every keyword.
+public func queryWords(_ text: String) -> [String] {
+    text.split { !$0.isLetter }.map(String.init).filter { $0.count > 2 }
 }
 
-private func score(_ intent: Intent, _ words: [String]) -> Double {
-    if words.isEmpty { return 0 }
-    var hits = 0
-    for w in words {
-        for k in intent.words {
-            if k == w {
-                hits += 2
-                break
-            }
-            if k.hasPrefix(w) || w.hasPrefix(k) {
-                hits += 1
-                break
-            }
-        }
+/// The share of `words` found among `keywords`, either way round ("pic" finds
+/// "picture", "tables" finds "table"), ignoring case and accents as Finder does.
+public func relevance(of words: [String], to keywords: [String]) -> Double {
+    guard !words.isEmpty else { return 0 }
+    let hits = words.filter { word in
+        keywords.contains { $0.localizedStandardContains(word) || word.localizedStandardContains($0) }
     }
-    // Normalise so a long intent vocabulary is not an advantage.
-    return hits == 0 ? 0 : Double(hits) / Double(words.count)
+    return Double(hits.count) / Double(words.count)
 }
 
 public func suggest(_ text: String, hasSelection: Bool = false, limit: Int = 6) -> [Suggestion] {
-    let words = tokenize(text)
+    let words = queryWords(text)
     let q = Query(
         words: words,
         nums: text.matches(of: #/\d+/#).prefix(2).compactMap { Int($0.output) },
@@ -214,7 +198,7 @@ public func suggest(_ text: String, hasSelection: Bool = false, limit: Int = 6) 
     let pool = hasSelection ? intents + wrappers : intents
     var out: [Suggestion] = []
     for intent in pool {
-        let sc = score(intent, words)
+        let sc = relevance(of: words, to: intent.words)
         if sc <= 0 { continue }
         var suggestion = intent.build(q)
         suggestion.id = intent.id
