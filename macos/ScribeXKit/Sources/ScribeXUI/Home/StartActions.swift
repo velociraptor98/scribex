@@ -22,7 +22,7 @@ struct StartActions: View {
             .buttonBorderShape(.capsule)
             .disabled(engine.locked)
             // Unlocks the buttons above, so it stays outside the lock.
-            SetupView(compact: false)
+            Setup(compact: false)
         }
     }
 }

@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The one-time download of the LaTeX packages and fonts: a card on
 /// Home, a banner across a document window.
-struct SetupView: View {
+struct Setup: View {
     @Environment(Engine.self) private var engine
     var compact: Bool
 
@@ -83,18 +83,18 @@ struct SetupView: View {
 
 #Preview("Card") {
     VStack(spacing: 24) {
-        SetupView(compact: false).environment(Engine.preview(.cold))
-        SetupView(compact: false).environment(Engine.preview(.downloading, files: 180))
-        SetupView(compact: false).environment(Engine.preview(.failed, error: "The network connection was lost."))
+        Setup(compact: false).environment(Engine.preview(.cold))
+        Setup(compact: false).environment(Engine.preview(.downloading, files: 180))
+        Setup(compact: false).environment(Engine.preview(.failed, error: "The network connection was lost."))
     }
     .frame(width: 472).padding(40).scribeStyle()
 }
 
 #Preview("Banner") {
     VStack(spacing: 0) {
-        SetupView(compact: true).environment(Engine.preview(.cold))
-        SetupView(compact: true).environment(Engine.preview(.downloading, files: 180))
-        SetupView(compact: true).environment(Engine.preview(.failed, error: "The network connection was lost."))
+        Setup(compact: true).environment(Engine.preview(.cold))
+        Setup(compact: true).environment(Engine.preview(.downloading, files: 180))
+        Setup(compact: true).environment(Engine.preview(.failed, error: "The network connection was lost."))
     }
     .frame(width: 900).scribeStyle()
 }

@@ -38,7 +38,7 @@ public struct DocumentView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            SetupView(compact: true)
+            Setup(compact: true)
             HSplitView {
                 if panels.contents {
                     Contents(model: session).frame(minWidth: 150, idealWidth: 190, maxWidth: 300)
@@ -62,7 +62,7 @@ public struct DocumentView: View {
         .sheet(item: $sheet) { which in
             switch which {
             case .palette:
-                PaletteView(model: session, commands: Command.all(focus, engine: session.engine))
+                Palette(model: session, commands: Command.all(focus, engine: session.engine))
             case .export:
                 if let preview = session.preview {
                     ExportSheet(model: session, pdf: preview.data, documentSheet: sheetOf(session.source))

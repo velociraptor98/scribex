@@ -100,9 +100,9 @@ struct Editor: NSViewRepresentable {
             scroll.contentInsets.top = topInset
         }
         let view = scroll.documentView as! LatexTextView
-        if let note = model.lineNote {
-            let host = context.coordinator.noteHost ?? NSHostingView(rootView: LineNoteView(note: note, session: model))
-            host.rootView = LineNoteView(note: note, session: model)
+        if let note = model.missingFile {
+            let host = context.coordinator.noteHost ?? NSHostingView(rootView: LineNote(note: note, session: model))
+            host.rootView = LineNote(note: note, session: model)
             context.coordinator.noteHost = host
             view.pin(host, line: note.line)
         } else {
@@ -114,7 +114,7 @@ struct Editor: NSViewRepresentable {
         let model: Session
         weak var view: LatexTextView?
         weak var undoManager: UndoManager?
-        var noteHost: NSHostingView<LineNoteView>?
+        var noteHost: NSHostingView<LineNote>?
         /// The span the last edit touched, re-coloured once the change lands.
         private var edited: NSRange?
 
@@ -501,8 +501,8 @@ struct LatexCompletion: STCompletionItem {
 }
 
 /// Pinned to the line that asked for a file the build lacked.
-struct LineNoteView: View {
-    let note: Session.LineNote
+struct LineNote: View {
+    let note: Session.MissingFile
     let session: Session
 
     var body: some View {

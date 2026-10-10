@@ -57,7 +57,7 @@ public final class Session {
 
     /// A file the last build needed and did not have, and the line that asked
     /// for it, for the note the editor pins there.
-    struct LineNote: Equatable {
+    struct MissingFile: Equatable {
         let file: String
         let line: Int
         /// In the TeX distribution, so Fetch can supply it; otherwise it belongs
@@ -65,7 +65,7 @@ public final class Session {
         let fetchable: Bool
     }
 
-    var lineNote: LineNote? {
+    var missingFile: MissingFile? {
         // Before setup every package is missing; the setup banner covers that.
         guard let file = absent ?? (engine.cache == .ready ? missing : nil) else { return nil }
         // The line that names it (\usepackage{cancel}, \includegraphics{figure.png}),
@@ -75,7 +75,7 @@ public final class Session {
             $0.range(of: "[{,]\\s*\(stem)[.\\w]*\\s*[,}]", options: .regularExpression) != nil
         }
         let line = names.map { $0 + 1 } ?? visible.lazy.compactMap(\.line).first ?? 1
-        return LineNote(file: file, line: line, fetchable: absent == nil)
+        return MissingFile(file: file, line: line, fetchable: absent == nil)
     }
 
     var source: String { document.text }

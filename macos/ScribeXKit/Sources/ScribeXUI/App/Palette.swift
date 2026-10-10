@@ -39,7 +39,7 @@ struct PaletteRow: Identifiable {
 
 /// ⌘K: describe a snippet in plain English, or name a command. A sheet over
 /// the document window.
-struct PaletteView: View {
+struct Palette: View {
     let model: Session
     /// Built by the window, which holds the state its commands change.
     let commands: [Command]
@@ -132,5 +132,5 @@ private struct PaletteItem: View {
 
 #Preview {
     let session = Session.preview()
-    PaletteView(model: session, commands: Command.all(Command.Focus(session: session), engine: session.engine))
+    Palette(model: session, commands: Command.all(Command.Focus(session: session), engine: session.engine))
 }

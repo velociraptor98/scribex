@@ -40,7 +40,7 @@ struct Renderer: View {
             .monospacedDigit()
             .padding(12)
 
-            PreviewView(preview: model.preview, zoom: zoom, onScale: { zoom.scale = $0 })
+            Pages(preview: model.preview, zoom: zoom, onScale: { zoom.scale = $0 })
                 .overlay { if model.preview == nil { Text("Nothing built yet").italic().foregroundStyle(.secondary) } }
                 .frame(maxHeight: .infinity)
         }
@@ -67,7 +67,7 @@ struct Renderer: View {
 }
 
 /// PDFKit's view of the pages, kept in place across rebuilds.
-private struct PreviewView: NSViewRepresentable {
+private struct Pages: NSViewRepresentable {
     var preview: Session.Preview?
     var zoom: Zoom
     var onScale: (Double) -> Void
