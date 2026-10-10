@@ -324,7 +324,7 @@ extension Session {
     /// The last document window to appear, for the debug script.
     static weak var active: Session?
 
-    /// A window's worth of state for previews: the article plate, and any
+    /// A window's worth of state for previews: the article template, and any
     /// issues to show. Nothing is typeset.
     static func preview(issues: [Diagnostic] = []) -> Session {
         let session = Session(document: TexDocument(), engine: .preview)

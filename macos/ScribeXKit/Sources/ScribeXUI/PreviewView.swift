@@ -23,10 +23,10 @@ struct PreviewView: NSViewRepresentable {
         view.minScaleFactor = Session.minZoom
         view.maxScaleFactor = Session.maxZoom
         view.autoScales = true
-        let plates = Plates(frame: view.bounds)
-        plates.autoresizingMask = [.width, .height]
-        view.addSubview(plates)
-        context.coordinator.plates = plates
+        let frames = PageFrames(frame: view.bounds)
+        frames.autoresizingMask = [.width, .height]
+        view.addSubview(frames)
+        context.coordinator.frames = frames
 
         let center = NotificationCenter.default
         context.coordinator.observers = [
@@ -34,7 +34,7 @@ struct PreviewView: NSViewRepresentable {
                 MainActor.assumeIsolated {
                     guard let view else { return }
                     context.coordinator.onScale?(Double(view.scaleFactor))
-                    context.coordinator.plates?.needsDisplay = true
+                    context.coordinator.frames?.needsDisplay = true
                 }
             },
 
@@ -58,7 +58,7 @@ struct PreviewView: NSViewRepresentable {
             swap(in: preview?.document, on: view)
             onPages(preview?.document.pageCount ?? 0)
             c.followScrolling(of: view)
-            c.plates?.needsDisplay = true
+            c.frames?.needsDisplay = true
         }
 
         if zoom != c.zoom {
@@ -109,10 +109,10 @@ struct PreviewView: NSViewRepresentable {
         var onScale: ((Double) -> Void)?
         var onPage: ((Int) -> Void)?
         var observers: [any NSObjectProtocol] = []
-        weak var plates: Plates?
+        weak var frames: PageFrames?
         private weak var clip: NSClipView?
 
-        /// Scrolling moves the pages under the plates. PDFKit makes its scroll
+        /// Scrolling moves the pages under the frames. PDFKit makes its scroll
         /// view along with the first document, so this waits until there is one.
         func followScrolling(of view: PDFView) {
             guard let clip = view.documentView?.enclosingScrollView?.contentView, clip !== self.clip else { return }
@@ -121,7 +121,7 @@ struct PreviewView: NSViewRepresentable {
             observers.append(NotificationCenter.default.addObserver(
                 forName: NSView.boundsDidChangeNotification, object: clip, queue: .main
             ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.plates?.needsDisplay = true }
+                MainActor.assumeIsolated { self?.frames?.needsDisplay = true }
             })
         }
     }
@@ -129,7 +129,7 @@ struct PreviewView: NSViewRepresentable {
 
 /// Drawn over the PDF view rather than into the pages, so the border sits
 /// outside each page, hides none of it, and stays 7pt at any zoom.
-final class Plates: NSView {
+final class PageFrames: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     override func draw(_ dirtyRect: NSRect) {

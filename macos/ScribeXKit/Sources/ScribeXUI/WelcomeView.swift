@@ -17,7 +17,7 @@ public struct WelcomeView: View {
                 Spacer(minLength: 24)
                 VStack(alignment: .leading, spacing: 32) {
                     actions
-                    templates
+                    templateTiles
                 }
             }
             .frame(width: 472)
@@ -67,21 +67,21 @@ public struct WelcomeView: View {
         }
     }
 
-    private var templates: some View {
+    private var templateTiles: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Start from a plate").smallCaps()
+            Text("Start from a template").smallCaps()
             HStack(spacing: 12) {
-                ForEach(plates) { plate in
-                    Button { newDocument { TexDocument(text: plate.source) } } label: {
+                ForEach(templates) { template in
+                    Button { newDocument { TexDocument(text: template.source) } } label: {
                         VStack(spacing: 8) {
-                            PlateSketch(name: plate.name)
+                            TemplateSketch(name: template.name)
                                 .frame(maxWidth: .infinity, minHeight: 100)
                                 .background(.quaternary, in: RoundedRectangle(cornerRadius: 11))
-                            Text(plate.name)
+                            Text(template.name)
                         }
                     }
                     .buttonStyle(.plain)
-                    .help(plate.note)
+                    .help(template.note)
                 }
             }
             .disabled(engine.locked)
@@ -159,9 +159,9 @@ private struct RecentRow: View {
     }
 }
 
-/// A plate's first page in miniature: a sheet of paper with grey lines where
+/// A template's first page in miniature: a sheet of paper with grey lines where
 /// its type would be.
-private struct PlateSketch: View {
+private struct TemplateSketch: View {
     let name: String
 
     var body: some View {

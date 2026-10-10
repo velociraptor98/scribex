@@ -71,7 +71,7 @@ public final class Engine {
         }
     }
 
-    /// Downloads the core packages and fonts by building every plate once.
+    /// Downloads the core packages and fonts by building every template once.
     /// Windows watch `cache` and rebuild when it turns ready.
     func setUp() {
         guard !settingUp else { return }
@@ -85,7 +85,7 @@ public final class Engine {
             }
             do throws(BuildError) {
                 _ = try await typesetter.warmUp(
-                    documents: plates.map(\.source),
+                    documents: templates.map(\.source),
                     dataDirectory: dataDirectory,
                     onFetch: fetchHandler
                 )

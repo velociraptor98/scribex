@@ -9,7 +9,7 @@ driven from Rust. No TeX Live installation or server is needed.
 - A standard Mac document app: one window per .tex file, with Save, Save As,
   Revert, Rename, Auto Save, Versions and Open Recent from macOS itself, and
   export to PDF (⌘E).
-- A welcome window with the system's recent documents and starter plates.
+- A welcome window with the system's recent documents and starter templates.
 - Live rebuild 600 ms after you stop typing. A rebuild takes about 700 ms once
   resources are cached.
 - Section outline, and TeX log errors that jump to the offending line. Some

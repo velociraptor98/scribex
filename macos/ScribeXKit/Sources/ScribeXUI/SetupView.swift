@@ -6,7 +6,7 @@ struct SetupView: View {
     @Environment(Engine.self) private var engine
     var compact: Bool
 
-    /// Measured against an empty cache: the warmup set plus the four plates.
+    /// Measured against an empty cache: the warmup set plus the four templates.
     /// The bundle can drift, so this only paces the bar and is quoted as "about".
     static let expectedFiles = 440
     static let expectedMB = 45

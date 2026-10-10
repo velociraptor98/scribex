@@ -50,7 +50,7 @@ package is read, so there is no missing file for the banner to offer. The app
 treats that failure as "not set up yet" (`BuildError.isColdCache`) and asks
 for a one-time download instead of reporting a build error.
 
-The download (`Typesetter.warmUp`) builds `WARMUP` and then each plate with the
+The download (`Typesetter.warmUp`) builds `WARMUP` and then each template with the
 network allowed, so every document the app offers works offline afterwards.
 On success it writes a `cache-ready` marker in the app data directory; the
 start screen offers the download for as long as that marker is absent. It is
@@ -62,8 +62,8 @@ Measured from an empty cache (September 2026):
 | Step | Files | Time |
 |---|---|---|
 | `WARMUP` | 326 | 77 s |
-| Letter, Thesis plates | 3 | ~3 s |
-| Beamer plate | 114 | 28 s |
+| Letter, Thesis templates | 3 | ~3 s |
+| Beamer template | 114 | 28 s |
 | **Total** | **~443 (45 MB)** | **~105 s** |
 
 Downloads are strictly sequential inside Tectonic, which is why this is slow.
