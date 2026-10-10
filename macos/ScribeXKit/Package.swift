@@ -13,7 +13,7 @@ let package = Package(
         .package(url: "https://github.com/krzyzanowskim/STTextView", from: "2.4.1"),
     ],
     targets: [
-        .target(name: "ScribeXCore", resources: [.copy("Resources")]),
+        .target(name: "ScribeXCore", resources: [.copy("Content/Resources")]),
         .target(
             name: "ScribeXUI",
             dependencies: [
