@@ -9,12 +9,22 @@ struct PaletteRow: Identifiable {
     var hint: String?
     var text: String?
     var command: Command?
+    /// The heading it comes under while browsing; nil once searching.
+    var section: Command.Menu?
 
     /// Snippets and commands in one list, both ranked by `relevance`.
     static func rows(for query: String, commands: [Command], hasSelection: Bool) -> [PaletteRow] {
         let cmds = commands.filter { $0.inPalette && $0.isEnabled }
         if query.trimmingCharacters(in: .whitespaces).isEmpty {
-            return cmds.map { PaletteRow(id: $0.id, title: $0.label, hint: $0.hint, command: $0) }
+            // Grouped by menu, in menu order; within a group, as defined.
+            let order = Command.Menu.allCases
+            return cmds.enumerated()
+                .sorted { a, b in
+                    let x = order.firstIndex(of: a.element.menu ?? .file)!, y = order.firstIndex(of: b.element.menu ?? .file)!
+                    return x != y ? x < y : a.offset < b.offset
+                }
+                .map { PaletteRow(id: $0.element.id, title: $0.element.label, hint: $0.element.hint,
+                                  command: $0.element, section: $0.element.menu ?? .file) }
         }
 
         let words = tokenize(query)
@@ -48,6 +58,12 @@ struct Palette: View {
     @State private var active: String?
     @FocusState private var focused: Bool
 
+    init(model: Session, commands: [Command]) {
+        self.model = model
+        self.commands = commands
+        _active = State(initialValue: PaletteRow.rows(for: "", commands: commands, hasSelection: false).first?.id)
+    }
+
     var body: some View {
         let rows = PaletteRow.rows(for: query, commands: commands, hasSelection: !model.editor.selectedText.isEmpty)
 
@@ -68,24 +84,45 @@ struct Palette: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(20)
             } else {
-                List(rows, selection: $active) { row in
-                    PaletteItem(row: row)
+                let groups = sections(rows)
+                List(selection: $active) {
+                    ForEach(groups, id: \.title) { group in
+                        Section {
+                            ForEach(group.rows) { PaletteItem(row: $0) }
+                        } header: {
+                            if let title = group.title { Text(title).smallCaps() }
+                        }
+                    }
                 }
                 .scrollContentBackground(.hidden)
                 .contextMenu(forSelectionType: String.self) { _ in } primaryAction: { ids in
                     choose(rows.first { ids.contains($0.id) })
                 }
-                .frame(height: min(CGFloat(rows.count) * 50 + 12, 360))
+                .frame(height: min(CGFloat(rows.count) * 50 + CGFloat(groups.count - 1) * 30 + 12, 420))
             }
         }
         .frame(width: 600)
         .scribeStyle()
-        .onAppear {
-            focused = true
-            active = rows.first?.id
-        }
+        // Focus and selection are set up front rather than in onAppear: a state
+        // change there leaves the list an update to apply while the window is
+        // first shown, which SwiftUI's List can't take (it traps in the canvas).
+        .defaultFocus($focused, true)
         .onChange(of: query) { active = PaletteRow.rows(for: query, commands: commands, hasSelection: !model.editor.selectedText.isEmpty).first?.id }
         .onExitCommand(perform: close)
+    }
+
+    /// Consecutive rows under the same heading; a single untitled group when searching.
+    private func sections(_ rows: [PaletteRow]) -> [(title: String?, rows: [PaletteRow])] {
+        var groups: [(title: String?, rows: [PaletteRow])] = []
+        for row in rows {
+            let title = row.section?.title
+            if !groups.isEmpty, groups[groups.count - 1].title == title {
+                groups[groups.count - 1].rows.append(row)
+            } else {
+                groups.append((title, [row]))
+            }
+        }
+        return groups
     }
 
     private func move(_ by: Int, in rows: [PaletteRow]) {
