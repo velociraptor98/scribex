@@ -1,7 +1,7 @@
 import ScribeXCore
 import SwiftUI
 
-/// The panel under the source and preview: what TeX complained about, in
+/// The panel under the preview: what TeX complained about, in
 /// plain words, with fixes.
 struct Issues: View {
     let model: Session
