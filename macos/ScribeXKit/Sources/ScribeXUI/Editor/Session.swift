@@ -55,6 +55,29 @@ public final class Session {
         derive()
     }
 
+    /// A file the last build needed and did not have, and the line that asked
+    /// for it, for the note the editor pins there.
+    struct LineNote: Equatable {
+        let file: String
+        let line: Int
+        /// In the TeX distribution, so Fetch can supply it; otherwise it belongs
+        /// in the document's folder.
+        let fetchable: Bool
+    }
+
+    var lineNote: LineNote? {
+        // Before setup every package is missing; the setup banner covers that.
+        guard let file = absent ?? (engine.cache == .ready ? missing : nil) else { return nil }
+        // The line that names it (\usepackage{cancel}, \includegraphics{figure.png}),
+        // else where TeX stopped (a font comes from no line), else the first.
+        let stem = NSRegularExpression.escapedPattern(for: (file as NSString).deletingPathExtension)
+        let names = source.components(separatedBy: "\n").firstIndex {
+            $0.range(of: "[{,]\\s*\(stem)[.\\w]*\\s*[,}]", options: .regularExpression) != nil
+        }
+        let line = names.map { $0 + 1 } ?? visible.lazy.compactMap(\.line).first ?? 1
+        return LineNote(file: file, line: line, fetchable: absent == nil)
+    }
+
     var source: String { document.text }
     var name: String { fileURL?.lastPathComponent ?? "untitled.tex" }
     var visible: [Diagnostic] { diags.filter { !ignored.contains($0.key) } }

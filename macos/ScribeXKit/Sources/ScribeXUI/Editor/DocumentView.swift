@@ -39,7 +39,6 @@ public struct DocumentView: View {
     public var body: some View {
         VStack(spacing: 0) {
             SetupView(compact: true)
-            banners
             HSplitView {
                 if panels.contents {
                     Contents(model: session).frame(minWidth: 150, idealWidth: 190, maxWidth: 300)
@@ -120,39 +119,6 @@ public struct DocumentView: View {
     /// The palette's commands act on this window's state directly.
     private var focus: Command.Focus {
         Command.Focus(session: session, panels: $panels, zoom: $zoom, sheet: $sheet)
-    }
-
-    @ViewBuilder private var banners: some View {
-        if let missing = session.missing, session.engine.cache == .ready {
-            Banner {
-                Text("\(Text(missing).monospaced().foregroundStyle(.gilt)) is not in the offline cache.")
-                Button("Fetch it") { session.build(allowNetwork: true) }.buttonStyle(.borderedProminent)
-                Button("Download the essentials", action: session.setUp)
-                Text("both need the network, once").italic().foregroundStyle(.secondary)
-            }
-            .disabled(session.busy)
-        }
-        if let absent = session.absent {
-            Banner {
-                Text("\(Text(absent).monospaced().foregroundStyle(.gilt)) was not found. It is not part of the TeX distribution — put it in the same folder as \(session.name).")
-                if session.fileURL != nil { Button("Show the folder", action: session.revealFolder) }
-            }
-        }
-    }
-}
-
-/// A strip under the toolbar for something that needs a decision.
-private struct Banner<Content: View>: View {
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        HStack(spacing: 12) { content; Spacer(minLength: 0) }
-            .font(Fonts.text(12.5))
-            .lineLimit(2)
-            .controlSize(.small)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(Color.gilt.opacity(0.12))
     }
 }
 

@@ -99,12 +99,22 @@ struct Editor: NSViewRepresentable {
         if scroll.contentInsets.top != topInset {
             scroll.contentInsets.top = topInset
         }
+        let view = scroll.documentView as! LatexTextView
+        if let note = model.lineNote {
+            let host = context.coordinator.noteHost ?? NSHostingView(rootView: LineNoteView(note: note, session: model))
+            host.rootView = LineNoteView(note: note, session: model)
+            context.coordinator.noteHost = host
+            view.pin(host, line: note.line)
+        } else {
+            view.pin(nil, line: 0)
+        }
     }
 
     final class Coordinator: STTextViewDelegate {
         let model: Session
         weak var view: LatexTextView?
         weak var undoManager: UndoManager?
+        var noteHost: NSHostingView<LineNoteView>?
         /// The span the last edit touched, re-coloured once the change lands.
         private var edited: NSRange?
 
@@ -137,6 +147,7 @@ struct Editor: NSViewRepresentable {
                 model.edit(view.text ?? "")
                 view.completeIfTyping()
             }
+            view.placePinned()
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {
@@ -215,6 +226,41 @@ final class LatexTextView: STTextView {
            gutter.frame.origin.y != -inset {
             gutter.frame.origin.y = -inset
         }
+        placePinned()
+    }
+
+    private var pinned: (view: NSView, line: Int)?
+
+    /// Keeps `view` at the end of `line` (1-based), or removes the one there.
+    func pin(_ view: NSView?, line: Int) {
+        if pinned?.view !== view { pinned?.view.removeFromSuperview() }
+        guard let view else {
+            pinned = nil
+            return
+        }
+        if view.superview !== self { addSubview(view) }
+        pinned = (view, line)
+        placePinned()
+    }
+
+    /// After the line's text, centred on it; against the right edge if the line
+    /// runs that far. Lines move with every edit, so this runs after each one.
+    func placePinned() {
+        guard let (view, line) = pinned else { return }
+        guard let range = range(ofLine: line), let window else {
+            view.isHidden = true
+            return
+        }
+        let end = NSRange(location: NSMaxRange(range), length: 0)
+        let caret = convert(window.convertFromScreen(firstRect(forCharacterRange: end, actualRange: nil)), from: nil)
+        let size = view.fittingSize
+        let right = enclosingScrollView?.documentVisibleRect.maxX ?? bounds.maxX
+        view.frame = NSRect(
+            x: min(caret.maxX + 24, right - size.width - 12),
+            y: caret.midY - size.height / 2,
+            width: size.width, height: size.height
+        )
+        view.isHidden = false
     }
 
     /// Opening a file is not an edit: nothing to undo, and the document stays clean.
@@ -451,6 +497,35 @@ struct LatexCompletion: STCompletionItem {
             .foregroundStyle(.ink)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 6))
+    }
+}
+
+/// Pinned to the line that asked for a file the build lacked.
+struct LineNoteView: View {
+    let note: Session.LineNote
+    let session: Session
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: note.fetchable ? "arrow.down.circle" : "questionmark.folder")
+                .foregroundStyle(.gilt)
+            Text("\(Text(note.file).monospaced()) \(note.fetchable ? "isn’t downloaded" : "isn’t in this folder")")
+            if note.fetchable {
+                Button(session.busy ? "Fetching…" : "Fetch") { session.build(allowNetwork: true) }
+                    .disabled(session.busy)
+            } else if session.fileURL != nil {
+                Button("Show Folder", action: session.revealFolder)
+            }
+        }
+        .font(Fonts.text(12))
+        .controlSize(.small)
+        .padding(.leading, 10)
+        .padding(.trailing, 4)
+        .padding(.vertical, 3)
+        .background(Color.gilt.opacity(0.14), in: .capsule)
+        .help(note.fetchable
+            ? "Not in the download cache. Fetch downloads it once; it then stays available offline."
+            : "Not part of the TeX distribution: put it in the same folder as the document.")
     }
 }
 
