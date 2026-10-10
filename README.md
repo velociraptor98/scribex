@@ -156,7 +156,8 @@ no Screen Recording permission; see `DebugScript.swift`.
 | `macos/ScribeXKit/Sources/ScribeXCore/Latex/Bibliography.swift` | Cited keys and the entries in .bib files |
 | `macos/ScribeXKit/Sources/ScribeXCore/Latex/Completions.swift` | The command and environment names the editor completes |
 | `macos/ScribeXKit/Sources/ScribeXCore/Latex/Highlighting.swift` | Tokens for syntax colouring, line by line |
-| `macos/ScribeXKit/Sources/ScribeXCore/Snippets.swift` | Plain-English → LaTeX snippet matcher |
+| `macos/ScribeXKit/Sources/ScribeXCore/Content/Snippets.swift` | Plain-English → LaTeX snippet matcher |
+| `macos/ScribeXKit/Sources/ScribeXCore/Content/Templates.swift` | Starter templates; their LaTeX is in `Resources/Templates` |
 | `macos/ScribeXKit/Sources/ScribeXUI/Document/TexDocument.swift` | The .tex document type; the document system does the file handling |
 | `macos/ScribeXKit/Sources/ScribeXUI/Document/Engine.swift` | Shared by all windows: the typesetter, download cache, offline switch |
 | `macos/ScribeXKit/Sources/ScribeXUI/Document/Session.swift` | One window: builds, preview, issues, zoom, export |
