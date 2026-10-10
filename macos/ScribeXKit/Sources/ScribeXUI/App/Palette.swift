@@ -48,15 +48,6 @@ struct Palette: View {
     @State private var active: String?
     @FocusState private var focused: Bool
 
-    init(model: Session, commands: [Command]) {
-        self.model = model
-        self.commands = commands
-        // The first row is selected from the start. Selecting it in onAppear
-        // changes the list's selection while the list is first being built,
-        // which trips an assertion inside SwiftUI's List (seen in the canvas).
-        _active = State(initialValue: PaletteRow.rows(for: "", commands: commands, hasSelection: false).first?.id)
-    }
-
     var body: some View {
         let rows = PaletteRow.rows(for: query, commands: commands, hasSelection: !model.editor.selectedText.isEmpty)
 
@@ -89,7 +80,10 @@ struct Palette: View {
         }
         .frame(width: 600)
         .scribeStyle()
-        .onAppear { focused = true }
+        .onAppear {
+            focused = true
+            active = rows.first?.id
+        }
         .onChange(of: query) { active = PaletteRow.rows(for: query, commands: commands, hasSelection: !model.editor.selectedText.isEmpty).first?.id }
         .onExitCommand(perform: close)
     }
