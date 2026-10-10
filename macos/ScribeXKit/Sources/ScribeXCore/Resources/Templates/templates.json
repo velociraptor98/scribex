@@ -1,0 +1,6 @@
+[
+  {"name": "Article", "note": "A paper, with sections and maths", "file": "article.tex"},
+  {"name": "Letter", "note": "Correspondence, with an opening and a closing", "file": "letter.tex"},
+  {"name": "Thesis", "note": "Chapters and a table of contents", "file": "thesis.tex"},
+  {"name": "Beamer", "note": "Slides", "file": "beamer.tex"}
+]

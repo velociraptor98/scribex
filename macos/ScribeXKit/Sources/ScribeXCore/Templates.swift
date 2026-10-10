@@ -1,4 +1,8 @@
-/// The first-run download builds each of these, so every plate works offline.
+import Foundation
+
+/// A starter document. The list is Resources/Templates/templates.json and each
+/// source is a .tex file beside it, so they read and edit as plain LaTeX. The
+/// first-run download builds every one, so each works offline.
 public struct Plate: Hashable, Sendable, Identifiable {
     public var name: String
     public var note: String
@@ -7,91 +11,16 @@ public struct Plate: Hashable, Sendable, Identifiable {
     public var id: String { name }
 }
 
-public let articleSource = #"""
-\documentclass{article}
-\title{ScribeX}
-\author{}
-\date{}
-\begin{document}
-\maketitle
+/// Bundled with the app, so files that fail to load are a build mistake.
+public let plates: [Plate] = {
+    struct Entry: Decodable { var name, note, file: String }
+    let folder = Bundle.module.url(forResource: "Templates", withExtension: nil, subdirectory: "Resources")!
+    let entries = try! JSONDecoder().decode([Entry].self, from: Data(contentsOf: folder.appending(path: "templates.json")))
+    return entries.map { entry in
+        Plate(name: entry.name, note: entry.note,
+              source: try! String(contentsOf: folder.appending(path: entry.file), encoding: .utf8))
+    }
+}()
 
-\section{Introduction}
-Start writing here.
-
-\section{Mathematics}
-\begin{equation}
-  \int_{-\infty}^{\infty} e^{-x^2}\,dx = \sqrt{\pi}
-\end{equation}
-
-\end{document}
-
-"""#
-
-private let letterSource = #"""
-\documentclass{letter}
-\signature{}
-\address{}
-\begin{document}
-
-\begin{letter}{The Editor \\ The Journal}
-\opening{Dear Editor,}
-
-Please find enclosed our manuscript for your consideration.
-
-\closing{Yours faithfully,}
-\end{letter}
-
-\end{document}
-
-"""#
-
-private let thesisSource = #"""
-\documentclass[12pt,oneside]{book}
-\title{A Thesis}
-\author{}
-\date{}
-\begin{document}
-\maketitle
-\tableofcontents
-
-\chapter{Introduction}
-\section{Background}
-The problem, and why it matters.
-
-\section{Contribution}
-What this thesis adds.
-
-\chapter{Method}
-How it was done.
-
-\end{document}
-
-"""#
-
-private let beamerSource = #"""
-\documentclass{beamer}
-\usetheme{default}
-\title{A Talk}
-\author{}
-\date{}
-\begin{document}
-
-\frame{\titlepage}
-
-\begin{frame}{First slide}
-  \begin{itemize}
-    \item A point
-    \item Another point
-  \end{itemize}
-\end{frame}
-
-\end{document}
-
-"""#
-
-public let plates: [Plate] = [
-    Plate(name: "Article", note: "A paper, with sections and maths", source: articleSource),
-    Plate(name: "Letter", note: "Correspondence, with an opening and a closing", source: letterSource),
-    Plate(name: "Thesis", note: "Chapters and a table of contents", source: thesisSource),
-    Plate(name: "Beamer", note: "Slides", source: beamerSource),
-]
+/// What a new document starts as.
+public var articleSource: String { plates[0].source }
