@@ -164,7 +164,7 @@ no Screen Recording permission; see `DebugScript.swift`.
 | `macos/ScribeXKit/Sources/ScribeXUI/App/Commands.swift` | Every command, defined once for the menu bar and the ⌘K palette |
 | `macos/ScribeXKit/Sources/ScribeXUI/App/MenuBar.swift` | Lays the commands out in the menus, acting on the front window through `@FocusedValue` |
 | `macos/ScribeXKit/Sources/ScribeXUI/Editor/Editor.swift` | STTextView setup, LaTeX colouring, brackets, completion |
-| `macos/ScribeXKit/Sources/ScribeXUI/Editor/PreviewView.swift` | PDFKit preview; keeps scroll position across rebuilds |
+| `macos/ScribeXKit/Sources/ScribeXUI/Editor/Renderer.swift` | The preview column: PDFKit pages that keep their scroll position across rebuilds, zoom, Export |
 | `macos/ScribeXKit/Sources/ScribeXUI/App/Style.swift` | The book look over native controls: colours, fonts, `scribeStyle()` |
 | `macos/licenses/` | Third-party licences, shipped inside the app |
 

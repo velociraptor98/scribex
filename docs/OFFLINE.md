@@ -72,7 +72,7 @@ Measured from an empty cache (September 2026):
 
 Downloads are strictly sequential inside Tectonic, which is why this is slow.
 Progress comes from the line the worker writes to stderr for each downloaded
-file (see `worker.rs`); `SetupView.expectedFiles` is the expected total and
+file (see `worker.rs`); `Setup.expectedFiles` is the expected total and
 only paces the bar.
 
 To reproduce a first launch without touching the real cache, point
