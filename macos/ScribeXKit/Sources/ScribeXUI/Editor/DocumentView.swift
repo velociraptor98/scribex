@@ -45,6 +45,7 @@ public struct DocumentView: View {
                     Contents(model: session).frame(minWidth: 150, idealWidth: 190, maxWidth: 300)
                 }
                 Editor(model: session).frame(minWidth: 300)
+                    .background(ThickDividers())
                 if panels.preview {
                     Renderer(model: session, zoom: $zoom) { sheet = .export }
                         .overlay(alignment: .bottom) {
@@ -160,6 +161,24 @@ private struct Banner<Content: View>: View {
             .padding(.vertical, 8)
             .background(Color.gilt.opacity(0.12))
     }
+}
+
+/// HSplitView has no say over its dividers, so this reaches the NSSplitView
+/// behind it: a thick divider is an easier target to grab than the hairline.
+private struct ThickDividers: NSViewRepresentable {
+    final class Probe: NSView {
+        override func viewDidMoveToWindow() {
+            // The split view adopts its panes after they move into the window.
+            DispatchQueue.main.async { [weak self] in
+                var view = self?.superview
+                while let next = view, !(next is NSSplitView) { view = next.superview }
+                (view as? NSSplitView)?.dividerStyle = .thick
+            }
+        }
+    }
+
+    func makeNSView(context: Context) -> Probe { Probe() }
+    func updateNSView(_ probe: Probe, context: Context) {}
 }
 
 /// Hands over the window the view lands in, for what SwiftUI can't do: enter full screen.
