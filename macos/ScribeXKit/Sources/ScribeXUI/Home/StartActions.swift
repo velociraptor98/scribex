@@ -26,7 +26,3 @@ struct StartActions: View {
         }
     }
 }
-
-#Preview {
-    StartActions().environment(Engine.preview).frame(width: 472).padding(40).scribeStyle()
-}

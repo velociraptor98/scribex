@@ -129,8 +129,3 @@ private struct PaletteItem: View {
         .padding(.vertical, 4)
     }
 }
-
-#Preview {
-    let session = Session.preview()
-    PaletteView(model: session, commands: Command.all(Command.Focus(session: session), engine: session.engine))
-}

@@ -59,7 +59,3 @@ private struct TemplateSketch: View {
         }
     }
 }
-
-#Preview {
-    TemplateTiles().environment(Engine.preview).frame(width: 472).padding(40).scribeStyle()
-}

@@ -5,15 +5,9 @@ import SwiftUI
 struct RecentList: View {
     @Environment(Engine.self) private var engine
     @Environment(\.openDocument) private var openDocument
-    @State private var recents: [URL]
-    @State private var selection: URL?
+    @State private var recents = NSDocumentController.shared.recentDocumentURLs
+    @State private var selection = NSDocumentController.shared.recentDocumentURLs.first
     @State private var problem: String?
-
-    init(recents: [URL] = NSDocumentController.shared.recentDocumentURLs, problem: String? = nil) {
-        _recents = State(initialValue: recents)
-        _selection = State(initialValue: recents.first)
-        _problem = State(initialValue: problem)
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -73,21 +67,4 @@ private struct RecentRow: View {
     private var title: String {
         documentTitle((try? String(contentsOf: url, encoding: .utf8)) ?? "", path: url.path)
     }
-}
-
-private let samples = ["~/Documents/Thesis/thesis.tex", "~/Documents/Papers/eigenvalues.tex",
-                       "~/Desktop/cover-letter.tex", "~/Documents/Talks/group-meeting/slides.tex"]
-    .map { URL(filePath: ($0 as NSString).expandingTildeInPath) }
-
-#Preview("Documents") {
-    RecentList(recents: samples).environment(Engine.preview).frame(width: 640, height: 820).background(.sunken).scribeStyle()
-}
-
-#Preview("Empty") {
-    RecentList(recents: []).environment(Engine.preview).frame(width: 640, height: 820).background(.sunken).scribeStyle()
-}
-
-#Preview("Missing file") {
-    RecentList(recents: samples.dropFirst().map(\.self), problem: "thesis.tex could not be opened. It may have moved or been deleted.")
-        .environment(Engine.preview).frame(width: 640, height: 820).background(.sunken).scribeStyle()
 }

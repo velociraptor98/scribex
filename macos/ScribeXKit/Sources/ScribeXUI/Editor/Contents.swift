@@ -36,7 +36,3 @@ struct Contents: View {
 
     private func plural(_ n: Int, _ word: String) -> String { "\(n) \(word)\(n == 1 ? "" : "s")" }
 }
-
-#Preview {
-    Contents(model: .preview()).scribeStyle().frame(width: 200, height: 600)
-}

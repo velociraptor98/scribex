@@ -109,39 +109,3 @@ private struct IssueRow: View {
         }
     }
 }
-
-private let samples = [
-    Diagnostic(
-        severity: .error, title: "Unknown command",
-        detail: "TeX does not recognise this command. Check the spelling, or load the package that defines it.",
-        raw: "Undefined control sequence.", line: 12,
-        fixes: [Fix(label: "Use \\emph", line: 12, find: "\\emhp", replace: "\\emph")]
-    ),
-    Diagnostic(
-        severity: .warning, title: "No such reference: smith2020",
-        detail: "Nothing in the bibliography has this key.",
-        raw: "LaTeX Warning: Citation `smith2020' on page 1 undefined on input line 30.", line: 30,
-        fixes: [Fix(label: "Use smith2021", line: 30, find: "smith2020", replace: "smith2021")]
-    ),
-    Diagnostic(severity: .warning, title: "Line runs past the margin", raw: "Overfull \\hbox (3.0pt too wide) in paragraph"),
-]
-
-// The drawer as it sits at the foot of the preview column. Click the header to fold it.
-#Preview("Several issues") {
-    @Previewable @State var expanded = true
-    Issues(model: .preview(issues: samples), isExpanded: $expanded).scribeStyle().frame(width: 560, height: 480)
-}
-
-#Preview("Folded") {
-    @Previewable @State var expanded = false
-    VStack(spacing: 0) {
-        Spacer()
-        Issues(model: .preview(issues: samples), isExpanded: $expanded)
-    }
-    .scribeStyle().frame(width: 560, height: 480)
-}
-
-#Preview("No issues") {
-    @Previewable @State var expanded = true
-    Issues(model: .preview(), isExpanded: $expanded).scribeStyle().frame(width: 560, height: 220)
-}

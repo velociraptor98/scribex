@@ -207,8 +207,3 @@ private final class PageFrames: NSView {
         }
     }
 }
-
-#Preview {
-    @Previewable @State var zoom = Zoom()
-    Renderer(model: .preview(), zoom: $zoom, export: {}).scribeStyle().frame(width: 560, height: 700)
-}
