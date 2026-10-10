@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The one-time download of the LaTeX packages and fonts: a card on the
-/// welcome window, a banner across a document window.
+/// The one-time download of the LaTeX packages and fonts: a card on
+/// Home, a banner across a document window.
 struct SetupView: View {
     @Environment(Engine.self) private var engine
     var compact: Bool
