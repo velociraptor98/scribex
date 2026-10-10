@@ -167,7 +167,6 @@ public final class Session {
         }
 
         let context = LogContext(source: src, bibKeys: bib.keys, bibName: bib.name)
-        let name = self.name
         do throws(BuildError) {
             let r = try await engine.typesetter.typeset(
                 entry: target,
