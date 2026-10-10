@@ -70,8 +70,6 @@ struct Command: Identifiable {
             Command(id: "issues", title: session?.issuesOpen == true ? "Hide Issues" : "Show Issues",
                     keys: KeyboardShortcut("m", modifiers: [.shift, .command]), words: ["errors", "warnings", "problems"],
                     menu: .view, isEnabled: open) { session?.issuesOpen.toggle() },
-            Command(id: "presslog", title: session?.pressOpen == true ? "Hide Press Log" : "Show Press Log",
-                    words: ["log", "tex", "passes"], menu: .view, isEnabled: open) { session?.pressOpen.toggle() },
         ]
     }
 

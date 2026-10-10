@@ -1,9 +1,8 @@
 import ScribeXCore
 import SwiftUI
 
-/// Contents · source · preview side by side, the issues panel beneath the
-/// preview, and the press log along the foot. Every part but the source can
-/// be closed; the splits resize them.
+/// Contents · source · preview side by side, with the issues panel beneath
+/// the preview. Every part but the source can be closed; the splits resize them.
 struct EditorScreen: View {
     let model: Session
 
@@ -28,7 +27,6 @@ struct EditorScreen: View {
                     .frame(minWidth: 320, idealWidth: 560)
                 }
             }
-            PressLogView(model: model)
         }
         .toolbar {
             ToolbarItem(placement: .navigation) {

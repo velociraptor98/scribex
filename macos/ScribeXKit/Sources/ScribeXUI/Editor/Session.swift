@@ -37,7 +37,6 @@ public final class Session {
 
     private(set) var preview: Preview?
     private(set) var diags: [Diagnostic] = []
-    private(set) var press: [PressRow] = []
     private(set) var busy = false
     private(set) var missing: String?
     private(set) var absent: String?
@@ -53,7 +52,6 @@ public final class Session {
     var contentsOpen = true
     var rendererOpen = true
     var issuesOpen = false
-    var pressOpen = false
     var paletteOpen = false
     var exportOpen = false
     var selection = ""
@@ -205,7 +203,7 @@ public final class Session {
                 onFetch: engine.fetchHandler
             )
             guard mine == seq else { return }
-            let (parsed, rows) = await Self.read(r.log, context: context, name: name)
+            let parsed = await Self.read(r.log, context: context)
             guard mine == seq else { return }
             guard let document = PDFDocument(data: r.pdf) else {
                 status = "The engine produced a PDF that cannot be read"
@@ -213,7 +211,7 @@ public final class Session {
             }
             previewCount += 1
             preview = Preview(id: previewCount, data: r.pdf, document: document)
-            show(parsed, rows, missing: nil, absent: nil, ms: r.durationMs)
+            show(parsed, missing: nil, absent: nil, ms: r.durationMs)
             status = "Built in \(r.durationMs) ms"
         } catch {
             // Leave the status alone: the newer build owns it now.
@@ -221,15 +219,15 @@ public final class Session {
             if error.isColdCache {
                 // Not the document's fault: point at the setup instead of listing issues.
                 engine.noteColdCache()
-                show([], [], missing: nil, absent: nil, ms: error.durationMs)
+                show([], missing: nil, absent: nil, ms: error.durationMs)
                 status = "Waiting for the one-time download"
                 return
             }
             var context = context
             context.absentFiles = Set([error.absentFile].compactMap { $0 })
-            let (parsed, rows) = await Self.read(error.log, context: context, name: name)
+            let parsed = await Self.read(error.log, context: context)
             guard mine == seq else { return }
-            show(parsed, rows, missing: error.missingFile, absent: error.absentFile, ms: error.durationMs)
+            show(parsed, missing: error.missingFile, absent: error.absentFile, ms: error.durationMs)
             status = error.missingFile.map { "Missing: \($0)" }
                 ?? error.absentFile.map { "Not found: \($0)" }
                 ?? "Build failed"
@@ -238,9 +236,8 @@ public final class Session {
         }
     }
 
-    private func show(_ parsed: [Diagnostic], _ rows: [PressRow], missing: String?, absent: String?, ms: Int) {
+    private func show(_ parsed: [Diagnostic], missing: String?, absent: String?, ms: Int) {
         diags = parsed
-        press = rows
         ignored = []
         self.missing = missing
         self.absent = absent
@@ -249,10 +246,9 @@ public final class Session {
 
     /// Off the main thread: a long log runs to thousands of lines.
     private nonisolated static func read(
-        _ log: String, context: LogContext, name: String
-    ) async -> ([Diagnostic], [PressRow]) {
-        let parsed = parseLog(log, context: context)
-        return (parsed, pressLog(log, source: context.source, name: name, diags: parsed))
+        _ log: String, context: LogContext
+    ) async -> [Diagnostic] {
+        parseLog(log, context: context)
     }
 
     // MARK: Exporting

@@ -152,7 +152,6 @@ no Screen Recording permission; see `DebugScript.swift`.
 | `macos/ScribeXKit/Sources/ScribeXCore/Typesetter.swift` | Runs builds in the worker, one at a time; first-run download |
 | `macos/ScribeXKit/Sources/ScribeXCore/DocumentFiles.swift` | Export, and the source written alongside an export |
 | `macos/ScribeXKit/Sources/ScribeXCore/Latex/Issues.swift` | Turns the TeX log into issues, with plain-English titles and fixes |
-| `macos/ScribeXKit/Sources/ScribeXCore/Latex/PressLog.swift` | One summary line per build stage, for the press log |
 | `macos/ScribeXKit/Sources/ScribeXCore/Latex/Outline.swift` | Headings with LaTeX's numbering, document counts, the title |
 | `macos/ScribeXKit/Sources/ScribeXCore/Latex/Bibliography.swift` | Cited keys and the entries in .bib files |
 | `macos/ScribeXKit/Sources/ScribeXCore/Latex/Completions.swift` | The command and environment names the editor completes |

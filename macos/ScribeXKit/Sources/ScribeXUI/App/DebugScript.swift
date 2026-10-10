@@ -9,9 +9,9 @@ import SwiftUI
 ///     SCRIBEX_DEBUG_SCRIPT="snap welcome; new; wait 3; snap editor; quit" \
 ///     SCRIBEX_DEBUG_OUT=/tmp/shots ScribeX.app/Contents/MacOS/ScribeX
 ///
-/// Steps: `snap NAME`, `wait SECONDS`, `size WIDTH HEIGHT`, `new`, `open PATH`,
-/// `palette TEXT`, `close`, `export`, `marks`, `type TEXT`, `key TEXT`, `press`, `page NAME`,
-/// `fetch`, `essentials`, `network`, `save`, `undo`, `menus`, `state LABEL`, `quit`.
+/// Steps: `snap NAME`, `wait SECONDS`, `size WIDTH HEIGHT`, `fullscreen`, `new`, `open PATH`,
+/// `palette TEXT`, `close`, `export`, `issues`, `contents`, `renderer`, `type TEXT`, `key TEXT`,
+/// `page NAME`, `fetch`, `essentials`, `network`, `save`, `undo`, `menus`, `state LABEL`, `quit`.
 public enum DebugScript {
     public static func runIfRequested() {
         let env = ProcessInfo.processInfo.environment
@@ -54,7 +54,6 @@ public enum DebugScript {
         case "issues": session?.issuesOpen.toggle()
         case "contents": session?.contentsOpen.toggle()
         case "renderer": session?.rendererOpen.toggle()
-        case "press": session?.pressOpen.toggle()
         case "type": session?.editor.insert(arg)
         case "page":
             // Neither snapshot route captures PDFKit's page tiles, so this

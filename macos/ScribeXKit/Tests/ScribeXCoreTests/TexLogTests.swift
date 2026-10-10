@@ -94,25 +94,6 @@ struct TexLogTests {
         #expect(parseLog(line + line + line).count == 1)
     }
 
-    @Test func pressLogReportsWhatTheRunFound() {
-        let source = "\\cite{a,b}\\label{x}\\label{y}"
-        let log = "Overfull \\hbox (3.0pt too wide) in paragraph\nUnderfull \\vbox (badness 10000)\n"
-        let rows = pressLog(log, source: source, name: "paper.tex")
-
-        #expect(rows == [
-            PressRow(stage: "typeset", detail: "paper.tex → paper.pdf"),
-            PressRow(stage: "bibliography", detail: "2 keys resolved"),
-            PressRow(stage: "cross-refs", detail: "2 labels resolved"),
-            PressRow(stage: "justification", detail: "2 lines outside the measure", flagged: true),
-        ])
-    }
-
-    @Test func pressLogFlagsUnresolvedKeys() {
-        let diags = [Diagnostic(severity: .warning, title: "No such reference: a", raw: "")]
-        let rows = pressLog("", source: "\\cite{a}", diags: diags)
-        #expect(rows[1] == PressRow(stage: "bibliography", detail: "1 unresolved key", flagged: true))
-    }
-
     @Test func levenshteinDistance() {
         #expect(levenshtein("kitten", "sitting") == 3)
         #expect(levenshtein("", "abc") == 3)
