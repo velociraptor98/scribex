@@ -102,8 +102,12 @@ private struct PreviewView: NSViewRepresentable {
             center.addObserver(forName: .PDFViewScaleChanged, object: view, queue: .main) { [weak view] _ in
                 MainActor.assumeIsolated {
                     guard let view else { return }
-                    context.coordinator.onScale?(Double(view.scaleFactor))
                     context.coordinator.frames?.needsDisplay = true
+                    // PDFKit posts this from inside updateNSView (a new document or
+                    // zoom resets the scale), and the block runs there and then;
+                    // writing SwiftUI state mid-update is undefined, so report after.
+                    let scale = Double(view.scaleFactor)
+                    DispatchQueue.main.async { context.coordinator.onScale?(scale) }
                 }
             },
         ]
