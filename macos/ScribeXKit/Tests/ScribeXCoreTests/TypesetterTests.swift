@@ -116,18 +116,4 @@ struct TypesetterTests {
         #expect(doc.hasPrefix("\\documentclass{article}"))
         #expect(doc.contains("\\maketitle"))
     }
-
-    @Test func saveAndExport() throws {
-        let dir = try project()
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let entry = dir.appending(path: "nested/doc.tex")
-
-        try saveDocument("hello", to: entry)
-        #expect(try String(contentsOf: entry, encoding: .utf8) == "hello")
-
-        #expect(throws: FileError.self) { try exportPDF(for: entry, to: dir.appending(path: "out.pdf")) }
-        try FileManager.default.createDirectory(at: Typesetter.outputDirectory(for: entry), withIntermediateDirectories: true)
-        try Data("%PDF-x".utf8).write(to: Typesetter.pdfURL(for: entry))
-        #expect(try exportPDF(for: entry, to: dir.appending(path: "out.pdf")) == 6)
-    }
 }

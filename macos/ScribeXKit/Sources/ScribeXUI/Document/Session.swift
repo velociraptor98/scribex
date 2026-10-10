@@ -265,6 +265,9 @@ public final class Session {
     }
 
     func export(_ options: ExportOptions) {
+        // The PDF on screen, kept now: a newer build may replace it while the
+        // save panel is open.
+        guard let shown = preview?.data else { return }
         let target = fileURL ?? scratch
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.pdf]
@@ -286,7 +289,7 @@ public final class Session {
                 if rebuild { build() }
             }
             do {
-                let bytes: Int
+                var pdf = shown
                 if rebuild {
                     status = "Building for export…"
                     // Bypass `build` so the on-screen preview is not replaced by
@@ -299,17 +302,13 @@ public final class Session {
                         ifSuperseded: .run,
                         onFetch: engine.fetchHandler
                     )
-                    // Written from the bytes the build returned, not copied from
-                    // the build directory, where a queued preview may land first.
-                    try variant.pdf.write(to: dest)
-                    bytes = variant.pdf.count
-                } else {
-                    bytes = try exportPDF(for: target, to: dest)
+                    pdf = variant.pdf
                 }
+                try pdf.write(to: dest)
                 if options.sourceAlongside {
-                    try saveDocument(source, to: dest.deletingPathExtension().appendingPathExtension("tex"))
+                    try Data(source.utf8).write(to: dest.deletingPathExtension().appendingPathExtension("tex"))
                 }
-                status = "Exported \(bytes / 1024) KB to \(dest.lastPathComponent)"
+                status = "Exported \(pdf.count / 1024) KB to \(dest.lastPathComponent)"
                     + (options.sourceAlongside ? " (with source)" : "")
             } catch let error as BuildError {
                 status = "Export failed: \(error.message)"
