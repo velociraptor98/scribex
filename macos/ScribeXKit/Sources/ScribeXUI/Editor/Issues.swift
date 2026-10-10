@@ -5,6 +5,7 @@ import SwiftUI
 /// plain words, with fixes.
 struct Issues: View {
     let model: Session
+    @Binding var isOpen: Bool
 
     var body: some View {
         let diags = model.visible
@@ -12,7 +13,7 @@ struct Issues: View {
             HStack {
                 Text(diags.isEmpty ? "Issues" : "Issues · \(diags.count)").smallCaps()
                 Spacer()
-                Button("Close", systemImage: "xmark") { model.issuesOpen = false }
+                Button("Close", systemImage: "xmark") { isOpen = false }
                     .buttonStyle(.borderless)
                     .labelStyle(.iconOnly)
                     .help("Hide the issues (⇧⌘M)")
@@ -91,5 +92,5 @@ private struct IssueRow: View {
         raw: "Undefined control sequence.", line: 12,
         fixes: [Fix(label: "Use \\emph", line: 12, find: "\\emhp", replace: "\\emph")]
     )
-    Issues(model: .preview(issues: [issue])).scribeStyle().frame(width: 900, height: 260)
+    Issues(model: .preview(issues: [issue]), isOpen: .constant(true)).scribeStyle().frame(width: 900, height: 260)
 }

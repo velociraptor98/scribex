@@ -54,6 +54,12 @@ public final class EditorHandle {
         guard let view else { return }
         view.window?.makeFirstResponder(view)
     }
+
+    /// Read when needed rather than mirrored on every selection change.
+    var selectedText: String {
+        guard let view, view.textSelection.length > 0 else { return "" }
+        return ((view.text ?? "") as NSString).substring(with: view.textSelection)
+    }
 }
 
 struct Editor: NSViewRepresentable {
@@ -134,10 +140,7 @@ struct Editor: NSViewRepresentable {
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {
-            guard let view else { return }
-            let range = view.textSelection
-            model.selection = range.length == 0 ? "" : ((view.text ?? "") as NSString).substring(with: range)
-            view.matchBrackets()
+            view?.matchBrackets()
         }
 
         func textView(_ textView: STTextView, completionItemsAtLocation location: any NSTextLocation) -> [any STCompletionItem]? {

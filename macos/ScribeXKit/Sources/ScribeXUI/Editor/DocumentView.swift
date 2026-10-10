@@ -3,7 +3,7 @@ import SwiftUI
 
 /// The content of one document window. `DocumentGroup` makes one per open
 /// document and supplies the title, proxy icon, edited dot and save prompts.
-public struct DocumentWindow: View {
+public struct DocumentView: View {
     @State private var session: Session
     private let fileURL: URL?
     @Environment(\.dismissWindow) private var dismissWindow
@@ -16,28 +16,16 @@ public struct DocumentWindow: View {
     }
 
     public var body: some View {
-        @Bindable var session = session
         EditorScreen(model: session)
             .frame(minWidth: 880, minHeight: 560)
             .scribeStyle()
-            .sheet(isPresented: $session.paletteOpen) { PaletteView(model: session) }
-            .sheet(isPresented: $session.exportOpen) {
-                if let preview = session.preview {
-                    ExportSheet(model: session, pdf: preview.data, documentSheet: sheetOf(session.source))
-                }
-            }
             .environment(session.engine)
             .focusedSceneValue(\.session, session)
             .onChange(of: fileURL) { _, url in session.fileURL = url }
             .onChange(of: session.engine.cache) { _, cache in
                 if cache == .ready { session.build() }
             }
-            .onAppear {
-                #if DEBUG
-                Session.active = session
-                #endif
-                session.scheduleBuild()
-            }
+            .onAppear { session.scheduleBuild() }
             .background(WindowProbe { window in
                 // A document is open; the welcome window has done its job.
                 // If it was full screen, this window takes its place there.

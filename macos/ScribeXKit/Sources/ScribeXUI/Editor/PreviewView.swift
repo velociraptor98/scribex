@@ -3,7 +3,7 @@ import SwiftUI
 
 struct PreviewView: NSViewRepresentable {
     var preview: Session.Preview?
-    var zoom: Session.Zoom
+    var zoom: Zoom
     var onScale: (Double) -> Void
     var onPages: (Int) -> Void
     var onPage: (Int) -> Void
@@ -20,8 +20,8 @@ struct PreviewView: NSViewRepresentable {
         view.pageBreakMargins = NSEdgeInsets(top: 9, left: 8, bottom: 9, right: 8)
         view.pageShadowsEnabled = false
         view.backgroundColor = NSColor.scribeSunken
-        view.minScaleFactor = Session.minZoom
-        view.maxScaleFactor = Session.maxZoom
+        view.minScaleFactor = Zoom.range.lowerBound
+        view.maxScaleFactor = Zoom.range.upperBound
         view.autoScales = true
         // Since macOS 14 views do not clip their drawing by default; without
         // this, the border of a page scrolled half out of view is drawn over
@@ -66,15 +66,12 @@ struct PreviewView: NSViewRepresentable {
             c.frames?.needsDisplay = true
         }
 
-        if zoom != c.zoom {
-            c.zoom = zoom
-            switch zoom {
-            case .fit:
-                view.autoScales = true
-            case let .scale(s):
-                view.autoScales = false
-                view.scaleFactor = s
-            }
+        // The scale comes back through onScale, so only a real difference is applied.
+        if zoom.fit {
+            if !view.autoScales { view.autoScales = true }
+        } else if view.autoScales || abs(Double(view.scaleFactor) - zoom.scale) > 0.001 {
+            view.autoScales = false
+            view.scaleFactor = zoom.scale
         }
     }
 
@@ -110,7 +107,6 @@ struct PreviewView: NSViewRepresentable {
 
     final class Coordinator {
         var shown: Int?
-        var zoom: Session.Zoom?
         var onScale: ((Double) -> Void)?
         var onPage: ((Int) -> Void)?
         var observers: [any NSObjectProtocol] = []

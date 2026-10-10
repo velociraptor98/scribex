@@ -10,13 +10,16 @@ import SwiftUI
 ///     SCRIBEX_DEBUG_OUT=/tmp/shots ScribeX.app/Contents/MacOS/ScribeX
 ///
 /// Steps: `snap NAME`, `wait SECONDS`, `size WIDTH HEIGHT`, `fullscreen`, `new`, `open PATH`,
-/// `palette TEXT`, `close`, `export`, `issues`, `contents`, `renderer`, `type TEXT`, `key TEXT`,
-/// `page NAME`, `fetch`, `essentials`, `network`, `save`, `undo`, `menus`, `state LABEL`, `quit`.
+/// `run COMMAND-ID`, `palette TEXT`, `close`, `type TEXT`, `key TEXT`, `page NAME`, `fetch`,
+/// `essentials`, `network`, `save`, `undo`, `menus`, `state LABEL`, `quit`. `run` takes an
+/// id from `Command.all`, e.g. `run issues`.
 public enum DebugScript {
     public static func runIfRequested() {
         let env = ProcessInfo.processInfo.environment
         guard let script = env["SCRIBEX_DEBUG_SCRIPT"] else { return }
         let out = URL(filePath: env["SCRIBEX_DEBUG_OUT"] ?? NSTemporaryDirectory())
+        // Unbuffered, so a run cut short by a timeout still shows how far it got.
+        setvbuf(stdout, nil, _IONBF, 0)
         Task {
             try? await Task.sleep(for: .seconds(1.5))
             for step in script.split(separator: ";").map({ $0.trimmingCharacters(in: .whitespaces) }) {
@@ -29,12 +32,18 @@ public enum DebugScript {
         }
     }
 
+    /// The last document window to appear, as its commands see it.
+    static var focus: Command.Focus?
+
+    /// The app runs in the background, so there is often no key window: this
+    /// is the frontmost one, or the sheet on it.
     private static var front: NSWindow? {
-        NSApp.keyWindow ?? NSApp.orderedWindows.first { $0.isVisible && $0.canBecomeKey }
+        let window = NSApp.keyWindow ?? NSApp.orderedWindows.first { $0.isVisible && $0.canBecomeKey && !$0.isSheet }
+        return window?.attachedSheet ?? window
     }
 
     private static func run(_ verb: String, _ arg: String, out: URL) async {
-        let session = Session.active
+        let session = focus?.session
         switch verb {
         case "snap": if let front { snap(front, to: out.appending(path: "\(arg).png")) }
         case "wait": try? await Task.sleep(for: .seconds(Double(arg) ?? 1))
@@ -45,15 +54,26 @@ public enum DebugScript {
         case "new": NSDocumentController.shared.newDocument(nil)
         case "open":
             _ = try? await NSDocumentController.shared.openDocument(withContentsOf: URL(filePath: arg), display: true)
+        case "run":
+            // The palette's route: the window's own commands, so the app need
+            // not be active (the menu bar acts only on the focused window).
+            if let focus, let command = Command.all(focus, engine: focus.session!.engine).first(where: { $0.id == arg }) {
+                command.run()
+            } else {
+                print("debug script: no command \(arg)")
+            }
         case "palette":
-            session?.paletteOpen = true
+            if let focus { Command.all(focus, engine: focus.session!.engine).first { $0.id == "palette" }?.run() }
             try? await Task.sleep(for: .milliseconds(300))
             (front?.firstResponder as? NSTextView)?.insertText(arg, replacementRange: NSRange(location: NSNotFound, length: 0))
-        case "close": session?.paletteOpen = false; session?.exportOpen = false
-        case "export": session?.requestExport()
-        case "issues": session?.issuesOpen.toggle()
-        case "contents": session?.contentsOpen.toggle()
-        case "renderer": session?.rendererOpen.toggle()
+        case "close":
+            // Escape, which both sheets answer.
+            if let window = front, let event = NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil, characters: "\u{1b}",
+                charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53) {
+                window.sendEvent(event)
+            }
         case "type": session?.editor.insert(arg)
         case "page":
             // Neither snapshot route captures PDFKit's page tiles, so this

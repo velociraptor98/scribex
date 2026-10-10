@@ -19,9 +19,20 @@ struct Command: Identifiable {
     var isEnabled = true
     let run: () -> Void
 
-    /// Everything, for the front document (`session`) if there is one.
-    static func all(session: Session?, engine: Engine) -> [Command] {
+    /// What the commands act on in the front document window: its session, and
+    /// the state its views keep, reached through bindings.
+    struct Focus {
+        var session: Session?
+        var panels: Binding<Panels>?
+        var zoom: Binding<Zoom>?
+        var sheet: Binding<DocumentSheet?>?
+    }
+
+    /// Everything, for the front document window if there is one.
+    static func all(_ focus: Focus, engine: Engine) -> [Command] {
+        let session = focus.session
         let open = session != nil
+        let previewShown = focus.zoom != nil && focus.panels?.wrappedValue.preview == true
         let send = { (action: Selector) in { NSApp.sendAction(action, to: nil, from: nil); return } }
         return [
             // File: macOS's own menu items, offered in the palette too.
@@ -34,7 +45,7 @@ struct Command: Identifiable {
             Command(id: "saveas", title: "Save As…", keys: KeyboardShortcut("s", modifiers: [.command, .shift]),
                     words: ["copy", "rename"], isEnabled: open, run: send(#selector(NSDocument.saveAs(_:)))),
             Command(id: "export", title: "Export as PDF…", keys: KeyboardShortcut("e"), words: ["pdf", "print"],
-                    menu: .file, isEnabled: session?.preview != nil) { session?.requestExport() },
+                    menu: .file, isEnabled: session?.preview != nil) { focus.sheet?.wrappedValue = .export },
 
             // Format. The palette has richer snippets for these.
             Command(id: "bold", title: "Bold", keys: KeyboardShortcut("b"), menu: .format, inPalette: false,
@@ -54,22 +65,22 @@ struct Command: Identifiable {
 
             // View.
             Command(id: "palette", title: "Command Palette…", keys: KeyboardShortcut("k"), menu: .view, inPalette: false,
-                    isEnabled: open) { session?.paletteOpen.toggle() },
+                    isEnabled: open) { focus.sheet?.wrappedValue = .palette },
             Command(id: "zoomin", title: "Zoom In", keys: KeyboardShortcut("="), words: ["enlarge", "bigger", "preview"],
-                    menu: .view, isEnabled: open) { session?.zoom(by: 1) },
+                    menu: .view, isEnabled: previewShown) { focus.zoom?.wrappedValue.step(1) },
             Command(id: "zoomout", title: "Zoom Out", keys: KeyboardShortcut("-"), words: ["reduce", "smaller", "preview"],
-                    menu: .view, isEnabled: open) { session?.zoom(by: -1) },
+                    menu: .view, isEnabled: previewShown) { focus.zoom?.wrappedValue.step(-1) },
             Command(id: "zoomfit", title: "Fit to Width", keys: KeyboardShortcut("0"), words: ["zoom", "fit", "reset", "preview"],
-                    menu: .view, isEnabled: open) { session?.zoom = .fit },
-            Command(id: "contents", title: session?.contentsOpen == false ? "Show Contents" : "Hide Contents",
+                    menu: .view, isEnabled: previewShown) { focus.zoom?.wrappedValue.fit = true },
+            Command(id: "contents", title: focus.panels?.wrappedValue.contents == false ? "Show Contents" : "Hide Contents",
                     keys: KeyboardShortcut("s", modifiers: [.control, .command]), words: ["outline", "sections", "sidebar"],
-                    menu: .view, isEnabled: open) { session?.contentsOpen.toggle() },
-            Command(id: "preview", title: session?.rendererOpen == false ? "Show Preview" : "Hide Preview",
+                    menu: .view, isEnabled: open) { focus.panels?.wrappedValue.contents.toggle() },
+            Command(id: "preview", title: focus.panels?.wrappedValue.preview == false ? "Show Preview" : "Hide Preview",
                     keys: KeyboardShortcut("p", modifiers: [.option, .command]), words: ["pdf", "pages", "renderer"],
-                    menu: .view, isEnabled: open) { session?.rendererOpen.toggle() },
-            Command(id: "issues", title: session?.issuesOpen == true ? "Hide Issues" : "Show Issues",
+                    menu: .view, isEnabled: open) { focus.panels?.wrappedValue.preview.toggle() },
+            Command(id: "issues", title: focus.panels?.wrappedValue.issues == true ? "Hide Issues" : "Show Issues",
                     keys: KeyboardShortcut("m", modifiers: [.shift, .command]), words: ["errors", "warnings", "problems"],
-                    menu: .view, isEnabled: open) { session?.issuesOpen.toggle() },
+                    menu: .view, isEnabled: open) { focus.panels?.wrappedValue.issues.toggle() },
         ]
     }
 
@@ -86,4 +97,12 @@ struct Command: Identifiable {
                 + String(keys.key.character).uppercased()
         }
     }
+}
+
+extension FocusedValues {
+    /// The front document window's session and view state, for the menu bar.
+    @Entry public var session: Session?
+    @Entry var panels: Binding<Panels>?
+    @Entry var zoom: Binding<Zoom>?
+    @Entry var sheet: Binding<DocumentSheet?>?
 }

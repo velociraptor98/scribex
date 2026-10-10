@@ -24,7 +24,7 @@ struct ScribeXApp: App {
         .commandsRemoved()
 
         DocumentGroup(newDocument: { TexDocument() }) { file in
-            DocumentWindow(document: file.document, fileURL: file.fileURL, engine: engine)
+            DocumentView(document: file.document, fileURL: file.fileURL, engine: engine)
                 .environment(engine)
         }
         .defaultSize(width: 1280, height: 820)

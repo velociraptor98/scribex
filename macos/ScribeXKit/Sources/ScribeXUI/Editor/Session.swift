@@ -4,15 +4,11 @@ import PDFKit
 import ScribeXCore
 import SwiftUI
 
-/// One document window: its builds, preview, issues and panels. The file
-/// itself, saving and the edited state belong to the document system.
+/// One document window's document: its builds, preview and issues. The file
+/// itself, saving and the edited state belong to the document system; what
+/// the window shows (panels, sheets, zoom) belongs to its views.
 @Observable
 public final class Session {
-
-    public enum Zoom: Equatable {
-        case fit
-        case scale(Double)
-    }
 
     /// `id` changes with every build, so the preview swaps documents even when
     /// the bytes happen to match.
@@ -23,9 +19,6 @@ public final class Session {
     }
 
     static let debounce = Duration.milliseconds(600)
-    static let minZoom = 0.25
-    static let maxZoom = 4.0
-    static let zoomSteps = [0.25, 0.33, 0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4]
 
     let engine: Engine
     @ObservationIgnored let document: TexDocument
@@ -46,15 +39,6 @@ public final class Session {
     private(set) var ignored: Set<String> = []
     var status = "Ready"
     var autoBuild = true { didSet { if autoBuild { scheduleBuild() } } }
-    var zoom = Zoom.fit
-    /// What "fit" resolves to on screen; zooming steps from here.
-    var scale = 1.0
-    var contentsOpen = true
-    var rendererOpen = true
-    var issuesOpen = false
-    var paletteOpen = false
-    var exportOpen = false
-    var selection = ""
 
     public let editor = EditorHandle()
     @ObservationIgnored private let scratch: URL
@@ -94,6 +78,7 @@ public final class Session {
         // "Turn the selection into a table" is the one suggestion whose output
         // depends on what is selected, so it is built here rather than in the
         // catalogue.
+        let selection = editor.selectedText
         if text.isEmpty && !selection.isEmpty {
             guard let table = selectionToTable(selection) else {
                 status = "That selection is not rows of separated values"
@@ -117,14 +102,6 @@ public final class Session {
     func revealFolder() {
         guard let fileURL else { return }
         NSWorkspace.shared.activateFileViewerSelecting([fileURL])
-    }
-
-    /// The scale on screen may be an odd fit-width value between stops.
-    func zoom(by direction: Int) {
-        let next = direction > 0
-            ? Self.zoomSteps.first { $0 > scale + 0.005 }
-            : Self.zoomSteps.last { $0 < scale - 0.005 }
-        zoom = .scale(next ?? (direction > 0 ? Self.maxZoom : Self.minZoom))
     }
 
     private func scheduleDerive() {
@@ -231,8 +208,8 @@ public final class Session {
             status = error.missingFile.map { "Missing: \($0)" }
                 ?? error.absentFile.map { "Not found: \($0)" }
                 ?? "Build failed"
-            // Stay on the last good preview. Switching to Issues here would do
-            // it on every half-typed command while building as you type.
+            // Stay on the last good preview, and leave the issues panel as it
+            // is: opening it here would do so on every half-typed command.
         }
     }
 
@@ -253,14 +230,6 @@ public final class Session {
 
     // MARK: Exporting
 
-    func requestExport() {
-        if preview != nil {
-            exportOpen = true
-        } else {
-            status = "Nothing to export yet"
-        }
-    }
-
     func export(_ options: ExportOptions) {
         // The PDF on screen, kept now: a newer build may replace it while the
         // save panel is open.
@@ -269,7 +238,6 @@ public final class Session {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.pdf]
         panel.nameFieldStringValue = (name as NSString).deletingPathExtension + ".pdf"
-        exportOpen = false
         Task {
             let response = if let window = NSApp.keyWindow {
                 await panel.beginSheetModal(for: window)
@@ -318,9 +286,6 @@ public final class Session {
 
 #if DEBUG
 extension Session {
-    /// The last document window to appear, for the debug script.
-    static weak var active: Session?
-
     /// A window's worth of state for previews: the article template, and any
     /// issues to show. Nothing is typeset.
     static func preview(issues: [Diagnostic] = []) -> Session {
@@ -335,7 +300,3 @@ extension Engine {
 }
 #endif
 
-extension FocusedValues {
-    /// The session of the frontmost document window, for the menu bar.
-    @Entry public var session: Session?
-}

@@ -7,6 +7,9 @@ import SwiftUI
 public struct MenuBar: Commands {
     let engine: Engine
     @FocusedValue(\.session) private var session
+    @FocusedValue(\.panels) private var panels
+    @FocusedValue(\.zoom) private var zoom
+    @FocusedValue(\.sheet) private var sheet
     @Environment(\.openWindow) private var openWindow
 
     public init(engine: Engine) {
@@ -14,7 +17,7 @@ public struct MenuBar: Commands {
     }
 
     public var body: some Commands {
-        let commands = Command.all(session: session, engine: engine)
+        let commands = Command.all(Command.Focus(session: session, panels: panels, zoom: zoom, sheet: sheet), engine: engine)
 
         CommandGroup(replacing: .appSettings) {}
         CommandGroup(replacing: .printItem) {}

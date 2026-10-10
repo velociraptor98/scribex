@@ -12,6 +12,7 @@ struct ExportSheet: View {
     @State private var sourceAlongside = false
     @State private var thumbs: [NSImage] = []
     @State private var pages = 0
+    @Environment(\.dismiss) private var dismiss
 
     init(model: Session, pdf: Data, documentSheet: Sheet) {
         self.model = model
@@ -52,9 +53,10 @@ struct ExportSheet: View {
             HStack {
                 Text(size + (model.buildMs.map { " · \($0) ms to set" } ?? "")).foregroundStyle(.secondary).monospacedDigit()
                 Spacer()
-                Button("Cancel", role: .cancel) { model.exportOpen = false }
+                Button("Cancel", role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button(model.busy ? "Building…" : "Export PDF") {
+                    dismiss()
                     model.export(ExportOptions(sheet: sheet, hyperlinks: hyperlinks, sourceAlongside: sourceAlongside))
                 }
                 .buttonStyle(.borderedProminent)

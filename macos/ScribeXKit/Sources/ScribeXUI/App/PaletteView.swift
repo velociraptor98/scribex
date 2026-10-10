@@ -49,12 +49,15 @@ struct PaletteRow: Identifiable {
 /// the document window.
 struct PaletteView: View {
     let model: Session
+    /// Built by the window, which holds the state its commands change.
+    let commands: [Command]
+    @Environment(\.dismiss) private var dismiss
     @State private var query = ""
     @State private var active: String?
     @FocusState private var focused: Bool
 
     var body: some View {
-        let rows = PaletteRow.rows(for: query, commands: Command.all(session: model, engine: model.engine), hasSelection: !model.selection.isEmpty)
+        let rows = PaletteRow.rows(for: query, commands: commands, hasSelection: !model.editor.selectedText.isEmpty)
 
         VStack(spacing: 0) {
             TextField("Describe what to insert, or name a command", text: $query)
@@ -89,7 +92,7 @@ struct PaletteView: View {
             focused = true
             active = rows.first?.id
         }
-        .onChange(of: query) { active = PaletteRow.rows(for: query, commands: Command.all(session: model, engine: model.engine), hasSelection: !model.selection.isEmpty).first?.id }
+        .onChange(of: query) { active = PaletteRow.rows(for: query, commands: commands, hasSelection: !model.editor.selectedText.isEmpty).first?.id }
         .onExitCommand(perform: close)
     }
 
@@ -109,7 +112,7 @@ struct PaletteView: View {
     }
 
     private func close() {
-        model.paletteOpen = false
+        dismiss()
         model.editor.focus()
     }
 }
@@ -136,5 +139,6 @@ private struct PaletteItem: View {
 }
 
 #Preview {
-    PaletteView(model: .preview())
+    let session = Session.preview()
+    PaletteView(model: session, commands: Command.all(Command.Focus(session: session), engine: session.engine))
 }
