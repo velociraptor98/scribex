@@ -453,3 +453,8 @@ struct LatexCompletion: STCompletionItem {
             .padding(.horizontal, 6))
     }
 }
+
+#Preview {
+    // The article template, coloured; typing and completion work in the canvas.
+    Editor(model: .preview()).scribeStyle().frame(width: 640, height: 600)
+}
