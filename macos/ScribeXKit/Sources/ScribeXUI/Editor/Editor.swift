@@ -194,6 +194,14 @@ final class LatexTextView: STTextView {
         descriptor: font.fontDescriptor.withSymbolicTraits(.italic), size: 13
     ) ?? font
     private static let indent = "  "
+    /// Lines 28pt apart, so they align with the page beside them, with the text
+    /// centred in each. TextKit counts a baseline offset into the line height:
+    /// lifting the text 9pt to the middle (it sits at the bottom of a taller
+    /// line) shrinks the line by 3pt, so it is set 3pt taller. Both measured.
+    /// A height multiple would be simpler, but STTextView's centring of those
+    /// overshoots and leaves the text about 4pt high.
+    private static let lineHeight: CGFloat = 31
+    private static let lift: CGFloat = 9
 
     func configure() {
         font = Self.font
@@ -209,9 +217,9 @@ final class LatexTextView: STTextView {
         isAutomaticTextReplacementEnabled = false
         isAutomaticTextCompletionEnabled = false
 
-        // A 28px rhythm, so lines align with the page beside them.
         let paragraph = NSMutableParagraphStyle()
-        paragraph.lineHeightMultiple = 28 / NSLayoutManager().defaultLineHeight(for: Self.font)
+        paragraph.minimumLineHeight = Self.lineHeight
+        paragraph.maximumLineHeight = Self.lineHeight
         defaultParagraphStyle = paragraph
 
         showsLineNumbers = true
@@ -317,7 +325,7 @@ final class LatexTextView: STTextView {
         let text = (self.text ?? "") as NSString
         // One transaction for the lot, rather than a layout pass per token.
         textContentManager.performEditingTransaction {
-            addAttributes([.foregroundColor: NSColor.scribeInk, .font: Self.font], range: range)
+            addAttributes([.foregroundColor: NSColor.scribeInk, .font: Self.font, .baselineOffset: Self.lift], range: range)
             latexTokens(in: text, range: range) { token, kind in
                 switch kind {
                 case .command:
