@@ -171,7 +171,3 @@ private struct PaletteItem: View {
         .padding(.vertical, 4)
     }
 }
-
-#Preview {
-    Palette(commands: Command.all(Command.Focus(), engine: .preview), hasSelection: false, insert: { _ in })
-}
