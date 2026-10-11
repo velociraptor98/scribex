@@ -102,7 +102,7 @@ struct Editor: NSViewRepresentable {
         context.coordinator.undoManager = context.environment.undoManager
         let view = scroll.documentView as! LatexTextView
         if let note = model.missingFile {
-            let host = context.coordinator.noteHost ?? NSHostingView(rootView: LineNote(note: note, session: model))
+            let host = context.coordinator.noteHost ?? NoteHost(rootView: LineNote(note: note, session: model))
             host.rootView = LineNote(note: note, session: model)
             context.coordinator.noteHost = host
             view.pin(host, line: note.line)
@@ -115,7 +115,7 @@ struct Editor: NSViewRepresentable {
         let model: Session
         weak var view: LatexTextView?
         weak var undoManager: UndoManager?
-        var noteHost: NSHostingView<LineNote>?
+        var noteHost: NoteHost?
         /// The span the last edit touched, re-coloured once the change lands.
         private var edited: NSRange?
 
@@ -262,6 +262,7 @@ final class LatexTextView: STTextView {
             width: size.width, height: size.height
         )
         view.isHidden = false
+        window.invalidateCursorRects(for: view)
     }
 
     /// Opening a file is not an edit: nothing to undo, and the document stays clean.
@@ -498,6 +499,15 @@ struct LatexCompletion: STCompletionItem {
             .foregroundStyle(.ink)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 6))
+    }
+}
+
+/// Hosts the note inside the text view. The text view claims its whole area
+/// for the I-beam; this claims the note's own area back for the arrow, so its
+/// button reads as a button.
+final class NoteHost: NSHostingView<LineNote> {
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .arrow)
     }
 }
 
