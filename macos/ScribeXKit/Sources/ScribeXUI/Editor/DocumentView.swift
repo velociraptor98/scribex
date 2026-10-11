@@ -27,6 +27,8 @@ public struct DocumentView: View {
     @State private var panels = Panels()
     @State private var zoom = Zoom()
     @State private var sheet: DocumentSheet?
+    /// The editor's cursor line, which the sidebar highlights the section of.
+    @State private var caretLine = 1
     @Environment(\.dismissWindow) private var dismissWindow
 
     public init(document: TexDocument, fileURL: URL?, engine: Engine) {
@@ -40,7 +42,7 @@ public struct DocumentView: View {
         // Contents is the window's sidebar, as Xcode's navigator is: the system
         // supplies its material, toggle button and Show/Hide Sidebar command.
         NavigationSplitView(columnVisibility: sidebar) {
-            Contents(model: session)
+            Contents(model: session, caretLine: caretLine)
                 .navigationSplitViewColumnWidth(min: 150, ideal: 190, max: 300)
         } detail: {
             detail
@@ -111,7 +113,7 @@ public struct DocumentView: View {
         VStack(spacing: 0) {
             Setup(compact: true)
             HSplitView {
-                Editor(model: session).frame(minWidth: 300)
+                Editor(model: session, caretLine: $caretLine).frame(minWidth: 300)
                     // A lighter edge beside the split's own dark line.
                     .overlay(alignment: .trailing) { Rectangle().fill(.separator).frame(width: 1) }
                 if panels.preview {

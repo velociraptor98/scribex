@@ -1,8 +1,9 @@
 import PDFKit
 import ScribeXCore
 import SwiftUI
+import UniformTypeIdentifiers
 
-/// ⌘E: choose the sheet and extras, then a save panel.
+/// ⌘E: choose the sheet and extras, then the system's save panel.
 struct ExportSheet: View {
     let model: Session
     let pdf: Data
@@ -12,6 +13,9 @@ struct ExportSheet: View {
     @State private var sourceAlongside = false
     @State private var thumbs: [NSImage] = []
     @State private var pages = 0
+    /// The PDF, once built, for the save panel.
+    @State private var file: PDFFile?
+    @State private var saving = false
     @Environment(\.dismiss) private var dismiss
 
     init(model: Session, pdf: Data, documentSheet: Sheet) {
@@ -64,8 +68,11 @@ struct ExportSheet: View {
                 Button("Cancel", role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button(model.busy ? "Building…" : "Export PDF") {
-                    dismiss()
-                    model.export(ExportOptions(sheet: sheet, hyperlinks: hyperlinks, sourceAlongside: sourceAlongside))
+                    Task {
+                        guard let pdf = await model.exportPDF(options) else { return }
+                        file = PDFFile(data: pdf)
+                        saving = true
+                    }
                 }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
@@ -77,6 +84,19 @@ struct ExportSheet: View {
         .frame(width: 560)
         .scribeStyle()
         .task(id: pdf) { renderThumbnails() }
+        // Cancelling the panel leaves the sheet open, to change the options.
+        .fileExporter(isPresented: $saving, document: file, contentType: .pdf,
+                      defaultFilename: (model.name as NSString).deletingPathExtension) { result in
+            switch result {
+            case let .success(url): if let file { model.exported(file.data, to: url, sourceAlongside: sourceAlongside) }
+            case let .failure(error): model.status = "Export failed: \(error.localizedDescription)"
+            }
+            dismiss()
+        }
+    }
+
+    private var options: ExportOptions {
+        ExportOptions(sheet: sheet, hyperlinks: hyperlinks, sourceAlongside: sourceAlongside)
     }
 
     /// "good.pdf · 2 pages · 41 KB"
@@ -102,6 +122,24 @@ struct ExportSheet: View {
             let bounds = page.bounds(for: .mediaBox)
             return page.thumbnail(of: NSSize(width: 192 * bounds.width / bounds.height, height: 192), for: .mediaBox)
         }
+    }
+}
+
+/// The exported PDF, in the form the save panel writes.
+private struct PDFFile: FileDocument {
+    static let readableContentTypes: [UTType] = [.pdf]
+    let data: Data
+
+    init(data: Data) {
+        self.data = data
+    }
+
+    init(configuration: ReadConfiguration) throws {
+        data = configuration.file.regularFileContents ?? Data()
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
     }
 }
 

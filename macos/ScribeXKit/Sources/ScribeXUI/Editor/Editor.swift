@@ -64,6 +64,8 @@ public final class EditorHandle {
 
 struct Editor: NSViewRepresentable {
     var model: Session
+    /// The cursor's line, 1-based, for the sidebar to show where you are.
+    @Binding var caretLine: Int
     /// Room around the text: above the first line, so it lines up with the
     /// first row of the panes beside it, and clear of the bottom and right.
     private static let insets = NSEdgeInsets(top: 34, left: 0, bottom: 40, right: 30)
@@ -100,6 +102,7 @@ struct Editor: NSViewRepresentable {
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         context.coordinator.undoManager = context.environment.undoManager
+        context.coordinator.caretLine = $caretLine
         let view = scroll.documentView as! LatexTextView
         if let note = model.missingFile {
             let host = context.coordinator.noteHost ?? NoteHost(rootView: LineNote(note: note, session: model))
@@ -115,6 +118,7 @@ struct Editor: NSViewRepresentable {
         let model: Session
         weak var view: LatexTextView?
         weak var undoManager: UndoManager?
+        var caretLine: Binding<Int>?
         var noteHost: NoteHost?
         /// The span the last edit touched, re-coloured once the change lands.
         private var edited: NSRange?
@@ -152,7 +156,11 @@ struct Editor: NSViewRepresentable {
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {
-            view?.matchBrackets()
+            guard let view else { return }
+            view.matchBrackets()
+            let before = ((view.text ?? "") as NSString).substring(to: view.textSelection.location)
+            let line = before.utf16.reduce(1) { $1 == 10 ? $0 + 1 : $0 }
+            if caretLine?.wrappedValue != line { caretLine?.wrappedValue = line }
         }
 
         func textView(_ textView: STTextView, completionItemsAtLocation location: any NSTextLocation) -> [any STCompletionItem]? {
@@ -546,5 +554,5 @@ struct LineNote: View {
 
 #Preview {
     // The article template, coloured; typing and completion work in the canvas.
-    Editor(model: .preview()).scribeStyle().frame(width: 640, height: 600)
+    Editor(model: .preview(), caretLine: .constant(1)).scribeStyle().frame(width: 640, height: 600)
 }

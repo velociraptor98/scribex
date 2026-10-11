@@ -246,56 +246,45 @@ public final class Session {
 
     // MARK: Exporting
 
-    func export(_ options: ExportOptions) {
-        // The PDF on screen, kept now: a newer build may replace it while the
-        // save panel is open.
-        guard let shown = preview?.data else { return }
-        let target = fileURL ?? scratch
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.pdf]
-        panel.nameFieldStringValue = (name as NSString).deletingPathExtension + ".pdf"
-        Task {
-            let response = if let window = NSApp.keyWindow {
-                await panel.beginSheetModal(for: window)
-            } else {
-                panel.runModal()
+    /// The PDF to export: the one on screen, or, when the options change the
+    /// page, a build of that variant. Nil if the build fails; the status says why.
+    func exportPDF(_ options: ExportOptions) async -> Data? {
+        guard let shown = preview?.data else { return nil }
+        guard options.needsRebuild(documentSheet: sheetOf(source)) else { return shown }
+        busy = true
+        status = "Building for export…"
+        defer {
+            busy = false
+            engine.clearFetched()
+            // Restore the preview's build output, which the export build replaced.
+            build()
+        }
+        do throws(BuildError) {
+            // Bypass `build` so the on-screen preview is not replaced by the
+            // variant, and never dropped: the user asked for this one.
+            seq += 1
+            return try await engine.typesetter.typeset(
+                entry: fileURL ?? scratch,
+                source: options.apply(to: source),
+                onlyCached: true,
+                ifSuperseded: .run,
+                onFetch: engine.fetchHandler
+            ).pdf
+        } catch {
+            status = "Export failed: \(error.message)"
+            return nil
+        }
+    }
+
+    /// After the system's save panel has written the PDF to `url`.
+    func exported(_ pdf: Data, to url: URL, sourceAlongside: Bool) {
+        do {
+            if sourceAlongside {
+                try Data(source.utf8).write(to: url.deletingPathExtension().appendingPathExtension("tex"))
             }
-            guard response == .OK, let dest = panel.url else { return }
-            let rebuild = options.needsRebuild(documentSheet: sheetOf(source))
-            busy = true
-            defer {
-                busy = false
-                engine.clearFetched()
-                // Restore the preview's build output, which the export build replaced.
-                if rebuild { build() }
-            }
-            do {
-                var pdf = shown
-                if rebuild {
-                    status = "Building for export…"
-                    // Bypass `build` so the on-screen preview is not replaced by
-                    // the variant, and never dropped: the user asked for this one.
-                    seq += 1
-                    let variant = try await engine.typesetter.typeset(
-                        entry: target,
-                        source: options.apply(to: source),
-                        onlyCached: true,
-                        ifSuperseded: .run,
-                        onFetch: engine.fetchHandler
-                    )
-                    pdf = variant.pdf
-                }
-                try pdf.write(to: dest)
-                if options.sourceAlongside {
-                    try Data(source.utf8).write(to: dest.deletingPathExtension().appendingPathExtension("tex"))
-                }
-                status = "Exported \(pdf.count / 1024) KB to \(dest.lastPathComponent)"
-                    + (options.sourceAlongside ? " (with source)" : "")
-            } catch let error as BuildError {
-                status = "Export failed: \(error.message)"
-            } catch {
-                status = "Export failed: \(error)"
-            }
+            status = "Exported \(pdf.count / 1024) KB to \(url.lastPathComponent)" + (sourceAlongside ? " (with source)" : "")
+        } catch {
+            status = "Exported the PDF, but not the source: \(error.localizedDescription)"
         }
     }
 }
