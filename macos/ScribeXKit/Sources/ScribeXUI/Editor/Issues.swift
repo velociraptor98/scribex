@@ -75,19 +75,18 @@ private struct IssueRow: View {
     var body: some View {
         let d = diagnostic
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Button(d.line.map { "l. \($0)" } ?? "—") {
-                if let line = d.line { model.editor.goto(line) }
-            }
-            .buttonStyle(.link)
-            .disabled(d.line == nil)
-            .help(d.line.map { "Go to line \($0)" } ?? "")
-            .frame(minWidth: 36, alignment: .leading)
+            Image(systemName: d.severity == .error ? "exclamationmark.circle.fill" : "exclamationmark.triangle.fill")
+                .foregroundStyle(d.severity == .error ? AnyShapeStyle(.mark) : AnyShapeStyle(.gilt))
+                .font(.system(size: 15))
+                .help(d.severity == .error ? "Error" : "Warning")
 
             VStack(alignment: .leading, spacing: 6) {
-                Label {
+                HStack(alignment: .firstTextBaseline) {
                     Text(d.title).font(Fonts.display(17, .semibold))
-                } icon: {
-                    if d.severity == .error { Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.mark) }
+                    Spacer()
+                    if let line = d.line {
+                        Text("Line \(line)").font(Fonts.text(11.5)).foregroundStyle(.secondary).monospacedDigit()
+                    }
                 }
                 if let detail = d.detail {
                     Text(detail).foregroundStyle(.secondary)
@@ -112,6 +111,7 @@ private struct IssueRow: View {
         .contentShape(.rect)
         .onTapGesture { if let line = d.line { model.editor.goto(line) } }
         .pointerStyle(d.line == nil ? nil : .link)
+        .help(d.line.map { "Go to line \($0)" } ?? "")
     }
 }
 
