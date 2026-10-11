@@ -33,7 +33,6 @@ public final class Session {
     private(set) var busy = false
     private(set) var missing: String?
     private(set) var absent: String?
-    private(set) var buildMs: Int?
     private(set) var sections: [OutlineEntry] = []
     private(set) var tally = DocStats(sections: 0, equations: 0, citations: 0)
     private(set) var ignored: Set<String> = []
@@ -206,7 +205,7 @@ public final class Session {
             }
             previewCount += 1
             preview = Preview(id: previewCount, data: r.pdf, document: document)
-            show(parsed, missing: nil, absent: nil, ms: r.durationMs)
+            show(parsed, missing: nil, absent: nil)
             status = "Built in \(r.durationMs) ms"
         } catch {
             // Leave the status alone: the newer build owns it now.
@@ -214,7 +213,7 @@ public final class Session {
             if error.isColdCache {
                 // Not the document's fault: point at the setup instead of listing issues.
                 engine.noteColdCache()
-                show([], missing: nil, absent: nil, ms: error.durationMs)
+                show([], missing: nil, absent: nil)
                 status = "Waiting for the one-time download"
                 return
             }
@@ -222,7 +221,7 @@ public final class Session {
             context.absentFiles = Set([error.absentFile].compactMap { $0 })
             let parsed = await Self.read(error.log, context: context)
             guard mine == seq else { return }
-            show(parsed, missing: error.missingFile, absent: error.absentFile, ms: error.durationMs)
+            show(parsed, missing: error.missingFile, absent: error.absentFile)
             status = error.missingFile.map { "Missing: \($0)" }
                 ?? error.absentFile.map { "Not found: \($0)" }
                 ?? "Build failed"
@@ -231,12 +230,11 @@ public final class Session {
         }
     }
 
-    private func show(_ parsed: [Diagnostic], missing: String?, absent: String?, ms: Int) {
+    private func show(_ parsed: [Diagnostic], missing: String?, absent: String?) {
         diags = parsed
         ignored = []
         self.missing = missing
         self.absent = absent
-        buildMs = ms
     }
 
     /// Off the main thread: a long log runs to thousands of lines.

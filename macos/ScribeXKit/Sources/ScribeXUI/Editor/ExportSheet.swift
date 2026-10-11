@@ -23,35 +23,43 @@ struct ExportSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Export").font(Fonts.display(30))
-                Text("\((model.name as NSString).deletingPathExtension).pdf" + (pages > 0 ? " · \(pages) page\(pages > 1 ? "s" : "")" : ""))
-                    .italic().foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Export").font(Fonts.display(30))
+                    Text(summary).italic().foregroundStyle(.secondary).monospacedDigit()
+                }
+                Spacer()
+                Picker("Sheet", selection: $sheet) {
+                    ForEach(Sheet.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
             }
 
-            HStack(alignment: .top, spacing: 24) {
-                HStack(spacing: 8) {
-                    ForEach(thumbs.indices, id: \.self) { i in
-                        Image(nsImage: thumbs[i]).resizable().aspectRatio(contentMode: .fit).frame(height: 96).shadow(radius: 3, y: 2)
+            // The first pages, in tiles like the templates on Home.
+            HStack(spacing: 12) {
+                ForEach(thumbs.indices, id: \.self) { i in
+                    VStack(spacing: 8) {
+                        Image(nsImage: thumbs[i]).resizable().aspectRatio(contentMode: .fit)
+                            .frame(height: 112).shadow(radius: 3, y: 2)
+                            .frame(maxWidth: .infinity, minHeight: 136)
+                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 11))
+                        Text("Page \(i + 1)")
                     }
                 }
-                Form {
-                    Picker("Sheet", selection: $sheet) {
-                        ForEach(Sheet.allCases, id: \.self) { Text($0.label).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
+            }
+            if sheet != documentSheet {
+                Text("The document is set on \(documentSheet.label). Exporting re-typesets it on \(sheet.label); your file is not changed.")
+                    .font(Fonts.text(11.5)).italic().foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 6) {
                     Toggle("Hyperlinked cross-references", isOn: $hyperlinks)
                     Toggle("Save the source .tex alongside", isOn: $sourceAlongside)
-                    if sheet != documentSheet {
-                        Text("The document is set on \(documentSheet.label). Exporting re-typesets it on \(sheet.label); your file is not changed.")
-                            .font(Fonts.text(11.5)).italic().foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
                 }
-            }
-
-            HStack {
-                Text(size + (model.buildMs.map { " · \($0) ms to set" } ?? "")).foregroundStyle(.secondary).monospacedDigit()
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
@@ -63,11 +71,19 @@ struct ExportSheet: View {
                 .keyboardShortcut(.defaultAction)
                 .disabled(model.busy)
             }
+            .buttonBorderShape(.capsule)
         }
         .padding(24)
         .frame(width: 560)
         .scribeStyle()
         .task(id: pdf) { renderThumbnails() }
+    }
+
+    /// "good.pdf · 2 pages · 41 KB"
+    private var summary: String {
+        let name = (model.name as NSString).deletingPathExtension + ".pdf"
+        let count = pages > 0 ? " · \(pages) page\(pages > 1 ? "s" : "")" : ""
+        return name + count + " · " + size
     }
 
     /// Most PDFs here are tens of kilobytes; "0.02 MB" tells the reader nothing.
