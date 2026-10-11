@@ -37,34 +37,13 @@ public struct DocumentView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
-            Setup(compact: true)
-            HSplitView {
-                if panels.contents {
-                    Contents(model: session).frame(minWidth: 150, idealWidth: 190, maxWidth: 300)
-                }
-                Editor(model: session).frame(minWidth: 300)
-                    // Lighter edges beside the split's own dark lines.
-                    .overlay {
-                        HStack {
-                            Rectangle().fill(.separator).frame(width: 1)
-                            Spacer()
-                            Rectangle().fill(.separator).frame(width: 1)
-                        }
-                    }
-                if panels.preview {
-                    Renderer(model: session, zoom: $zoom) { sheet = .export }
-                        .overlay(alignment: .bottom) {
-                            // Capped only when open: a max frame takes the whole height
-                            // it allows, which would lift the folded header off the foot.
-                            Issues(model: session, isExpanded: $panels.issues)
-                                .frame(maxHeight: panels.issues ? 320 : nil)
-                        }
-                        .frame(minWidth: 320, idealWidth: 560)
-                } else if panels.issues {
-                    Issues(model: session, isExpanded: $panels.issues).frame(minWidth: 320, idealWidth: 560)
-                }
-            }
+        // Contents is the window's sidebar, as Xcode's navigator is: the system
+        // supplies its material, toggle button and Show/Hide Sidebar command.
+        NavigationSplitView(columnVisibility: sidebar) {
+            Contents(model: session)
+                .navigationSplitViewColumnWidth(min: 150, ideal: 190, max: 300)
+        } detail: {
+            detail
         }
         // Typing resumes where it left off once a sheet closes.
         .sheet(item: $sheet, onDismiss: session.editor.focus) { which in
@@ -85,10 +64,6 @@ public struct DocumentView: View {
         .onAppear { DebugScript.focus = focus }
         #endif
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button("Contents", systemImage: "sidebar.left") { panels.contents.toggle() }
-                    .help(panels.contents ? "Hide the contents (⌃⌘S)" : "Show the contents (⌃⌘S)")
-            }
             ToolbarItemGroup(placement: .primaryAction) {
                 if let last = session.fetched.last {
                     ProgressView().controlSize(.small)
@@ -123,6 +98,36 @@ public struct DocumentView: View {
             }
             dismissWindow(id: HomeView.windowID)
         })
+    }
+
+    /// The sidebar's visibility, kept in `panels` so the palette can toggle it too.
+    private var sidebar: Binding<NavigationSplitViewVisibility> {
+        Binding(get: { panels.contents ? .all : .detailOnly },
+                set: { panels.contents = $0 != .detailOnly })
+    }
+
+    /// The source and the preview, with the issues drawer over the preview's foot.
+    private var detail: some View {
+        VStack(spacing: 0) {
+            Setup(compact: true)
+            HSplitView {
+                Editor(model: session).frame(minWidth: 300)
+                    // A lighter edge beside the split's own dark line.
+                    .overlay(alignment: .trailing) { Rectangle().fill(.separator).frame(width: 1) }
+                if panels.preview {
+                    Renderer(model: session, zoom: $zoom) { sheet = .export }
+                        .overlay(alignment: .bottom) {
+                            // Capped only when open: a max frame takes the whole height
+                            // it allows, which would lift the folded header off the foot.
+                            Issues(model: session, isExpanded: $panels.issues)
+                                .frame(maxHeight: panels.issues ? 320 : nil)
+                        }
+                        .frame(minWidth: 320, idealWidth: 560)
+                } else if panels.issues {
+                    Issues(model: session, isExpanded: $panels.issues).frame(minWidth: 320, idealWidth: 560)
+                }
+            }
+        }
     }
 
     /// The palette's commands act on this window's state directly.

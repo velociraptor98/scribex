@@ -19,6 +19,8 @@ public struct MenuBar: Commands {
     public var body: some Commands {
         let commands = Command.all(Command.Focus(session: session, panels: panels, zoom: zoom, sheet: sheet), engine: engine)
 
+        // Show/Hide Sidebar (⌃⌘S) for the contents, as in any Mac app with a sidebar.
+        SidebarCommands()
         CommandGroup(replacing: .appSettings) {}
         CommandGroup(replacing: .printItem) {}
         CommandGroup(after: .saveItem) {
@@ -43,7 +45,7 @@ public struct MenuBar: Commands {
     }
 
     private func items(_ commands: [Command], in menu: Command.Menu) -> some View {
-        ForEach(commands.filter { $0.menu == menu }) { command in
+        ForEach(commands.filter { $0.menu == menu && !$0.system }) { command in
             Group {
                 if let isOn = command.isOn {
                     Toggle(command.title, isOn: Binding(get: { isOn }, set: { _ in command.run() }))

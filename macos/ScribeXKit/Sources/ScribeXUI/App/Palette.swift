@@ -20,11 +20,11 @@ struct PaletteRow: Identifiable {
             let order = Command.Menu.allCases
             return cmds.enumerated()
                 .sorted { a, b in
-                    let x = order.firstIndex(of: a.element.menu ?? .file)!, y = order.firstIndex(of: b.element.menu ?? .file)!
+                    let x = order.firstIndex(of: a.element.menu)!, y = order.firstIndex(of: b.element.menu)!
                     return x != y ? x < y : a.offset < b.offset
                 }
                 .map { PaletteRow(id: $0.element.id, title: $0.element.label, hint: $0.element.hint,
-                                  command: $0.element, section: $0.element.menu ?? .file) }
+                                  command: $0.element, section: $0.element.menu) }
         }
 
         let words = tokenize(query)

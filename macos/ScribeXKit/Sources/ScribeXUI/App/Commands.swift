@@ -27,9 +27,11 @@ struct Command: Identifiable {
     var keys: KeyboardShortcut?
     /// Extra words the palette matches on, beyond the title.
     var words: [String] = []
-    /// Where it sits in the menu bar; nil for what macOS already provides
-    /// there, which the palette lists under File.
-    var menu: Menu?
+    /// Its group: the menu it sits in, and its heading in the palette.
+    var menu: Menu = .file
+    /// macOS already puts it in the menu bar (Save, Show Sidebar…); ScribeX
+    /// only offers it in the palette.
+    var system = false
     var inPalette = true
     /// Set for an on/off setting, shown with a checkmark in the menu.
     var isOn: Bool?
@@ -53,14 +55,14 @@ struct Command: Identifiable {
         let send = { (action: Selector) in { NSApp.sendAction(action, to: nil, from: nil); return } }
         return [
             // File: macOS's own menu items, offered in the palette too.
-            Command(id: "new", title: "New Document", keys: KeyboardShortcut("n"), words: ["blank", "start"],
+            Command(id: "new", title: "New Document", keys: KeyboardShortcut("n"), words: ["blank", "start"], system: true,
                     isEnabled: !engine.locked) { NSDocumentController.shared.newDocument(nil) },
-            Command(id: "open", title: "Open…", keys: KeyboardShortcut("o"), words: ["file", "document"],
+            Command(id: "open", title: "Open…", keys: KeyboardShortcut("o"), words: ["file", "document"], system: true,
                     isEnabled: !engine.locked) { NSDocumentController.shared.openDocument(nil) },
-            Command(id: "save", title: "Save", keys: KeyboardShortcut("s"), words: ["write", "disk"],
+            Command(id: "save", title: "Save", keys: KeyboardShortcut("s"), words: ["write", "disk"], system: true,
                     isEnabled: open, run: send(#selector(NSDocument.save(_:)))),
             Command(id: "saveas", title: "Save As…", keys: KeyboardShortcut("s", modifiers: [.command, .shift]),
-                    words: ["copy", "rename"], isEnabled: open, run: send(#selector(NSDocument.saveAs(_:)))),
+                    words: ["copy", "rename"], system: true, isEnabled: open, run: send(#selector(NSDocument.saveAs(_:)))),
             Command(id: "export", title: "Export as PDF…", keys: KeyboardShortcut("e"), words: ["pdf", "print"],
                     menu: .file, isEnabled: session?.preview != nil) { focus.sheet?.wrappedValue = .export },
 
@@ -89,7 +91,7 @@ struct Command: Identifiable {
                     menu: .view, isEnabled: previewShown) { focus.zoom?.wrappedValue.fit = true },
             Command(id: "contents", title: focus.panels?.wrappedValue.contents == false ? "Show Contents" : "Hide Contents",
                     keys: KeyboardShortcut("s", modifiers: [.control, .command]), words: ["outline", "sections", "sidebar"],
-                    menu: .view, isEnabled: open) { focus.panels?.wrappedValue.contents.toggle() },
+                    menu: .view, system: true, isEnabled: open) { focus.panels?.wrappedValue.contents.toggle() },
             Command(id: "preview", title: focus.panels?.wrappedValue.preview == false ? "Show Preview" : "Hide Preview",
                     keys: KeyboardShortcut("p", modifiers: [.option, .command]), words: ["pdf", "pages", "renderer"],
                     menu: .view, isEnabled: open) { focus.panels?.wrappedValue.preview.toggle() },
