@@ -49,11 +49,11 @@ struct ExportSheet: View {
                     }
                 }
             }
-            if sheet != documentSheet {
-                Text("The document is set on \(documentSheet.label). Exporting re-typesets it on \(sheet.label); your file is not changed.")
-                    .font(Fonts.text(11.5)).italic().foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            // Always laid out, only hidden, so picking a sheet never resizes the panel.
+            Text("The document is set on \(documentSheet.label). Exporting re-typesets it on \(sheet.label); your file is not changed.")
+                .font(Fonts.text(11.5)).italic().foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .opacity(sheet == documentSheet ? 0 : 1)
 
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 6) {
