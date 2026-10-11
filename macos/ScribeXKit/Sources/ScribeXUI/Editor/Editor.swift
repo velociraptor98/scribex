@@ -244,8 +244,8 @@ final class LatexTextView: STTextView {
         placePinned()
     }
 
-    /// After the line's text, centred on it; against the right edge if the line
-    /// runs that far. Lines move with every edit, so this runs after each one.
+    /// Against the right edge of what's visible, centred on the line, as Xcode
+    /// sets its issues. Lines move with every edit, so this runs after each one.
     func placePinned() {
         guard let (view, line) = pinned else { return }
         guard let range = range(ofLine: line), let window else {
@@ -257,7 +257,7 @@ final class LatexTextView: STTextView {
         let size = view.fittingSize
         let right = enclosingScrollView?.documentVisibleRect.maxX ?? bounds.maxX
         view.frame = NSRect(
-            x: min(caret.maxX + 24, right - size.width - 12),
+            x: right - size.width - 12,
             y: caret.midY - size.height / 2,
             width: size.width, height: size.height
         )
@@ -530,6 +530,7 @@ struct LineNote: View {
         }
         .font(Fonts.text(12))
         .controlSize(.small)
+        .buttonBorderShape(.capsule)
         .padding(.leading, 10)
         .padding(.trailing, 4)
         .padding(.vertical, 3)
