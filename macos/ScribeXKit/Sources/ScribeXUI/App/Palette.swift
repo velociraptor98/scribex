@@ -50,9 +50,12 @@ struct PaletteRow: Identifiable {
 /// ⌘K: describe a snippet in plain English, or name a command. A sheet over
 /// the document window.
 struct Palette: View {
-    let model: Session
     /// Built by the window, which holds the state its commands change.
     let commands: [Command]
+    /// Some snippets apply to selected text and are offered only then.
+    let hasSelection: Bool
+    /// Puts a chosen snippet's text into the document.
+    let insert: (String) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
     /// Scored when the query changes rather than on every redraw.
@@ -60,10 +63,11 @@ struct Palette: View {
     @State private var active: String?
     @FocusState private var focused: Bool
 
-    init(model: Session, commands: [Command]) {
-        self.model = model
+    init(commands: [Command], hasSelection: Bool, insert: @escaping (String) -> Void) {
         self.commands = commands
-        let rows = PaletteRow.rows(for: "", commands: commands, hasSelection: !model.editor.selectedText.isEmpty)
+        self.hasSelection = hasSelection
+        self.insert = insert
+        let rows = PaletteRow.rows(for: "", commands: commands, hasSelection: hasSelection)
         _rows = State(initialValue: rows)
         _active = State(initialValue: rows.first?.id)
     }
@@ -107,7 +111,7 @@ struct Palette: View {
         .scribeStyle()
         .defaultFocus($focused, true)
         .onChange(of: query) {
-            rows = PaletteRow.rows(for: query, commands: commands, hasSelection: !model.editor.selectedText.isEmpty)
+            rows = PaletteRow.rows(for: query, commands: commands, hasSelection: hasSelection)
             active = rows.first?.id
         }
         .onExitCommand(perform: close)
@@ -138,13 +142,12 @@ struct Palette: View {
         if let command = row.command {
             command.run()
         } else if let text = row.text {
-            model.insert(text)
+            insert(text)
         }
     }
 
     private func close() {
         dismiss()
-        model.editor.focus()
     }
 }
 
@@ -170,6 +173,5 @@ private struct PaletteItem: View {
 }
 
 #Preview {
-    let session = Session.preview()
-    Palette(model: session, commands: Command.all(Command.Focus(session: session), engine: session.engine))
+    Palette(commands: Command.all(Command.Focus(), engine: .preview), hasSelection: false, insert: { _ in })
 }

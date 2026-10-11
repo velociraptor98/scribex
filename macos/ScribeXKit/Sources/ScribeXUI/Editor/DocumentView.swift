@@ -60,10 +60,12 @@ public struct DocumentView: View {
                 }
             }
         }
-        .sheet(item: $sheet) { which in
+        // Typing resumes where it left off once a sheet closes.
+        .sheet(item: $sheet, onDismiss: session.editor.focus) { which in
             switch which {
             case .palette:
-                Palette(model: session, commands: Command.all(focus, engine: session.engine))
+                Palette(commands: Command.all(focus, engine: session.engine),
+                        hasSelection: !session.editor.selectedText.isEmpty, insert: session.insert)
             case .export:
                 if let preview = session.preview {
                     ExportSheet(model: session, pdf: preview.data, documentSheet: sheetOf(session.source))
