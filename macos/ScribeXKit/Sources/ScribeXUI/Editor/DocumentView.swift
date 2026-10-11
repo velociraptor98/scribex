@@ -44,8 +44,14 @@ public struct DocumentView: View {
                     Contents(model: session).frame(minWidth: 150, idealWidth: 190, maxWidth: 300)
                 }
                 Editor(model: session).frame(minWidth: 300)
-                    // A lighter edge beside the split's own dark line.
-                    .overlay(alignment: .trailing) { Rectangle().fill(.separator).frame(width: 1) }
+                    // Lighter edges beside the split's own dark lines.
+                    .overlay {
+                        HStack {
+                            Rectangle().fill(.separator).frame(width: 1)
+                            Spacer()
+                            Rectangle().fill(.separator).frame(width: 1)
+                        }
+                    }
                 if panels.preview {
                     Renderer(model: session, zoom: $zoom) { sheet = .export }
                         .overlay(alignment: .bottom) {
