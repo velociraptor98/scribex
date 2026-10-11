@@ -104,6 +104,7 @@ struct Editor: NSViewRepresentable {
         context.coordinator.undoManager = context.environment.undoManager
         context.coordinator.caretLine = $caretLine
         let view = scroll.documentView as! LatexTextView
+        view.markIssues(model.visible)
         if let note = model.missingFile {
             let host = context.coordinator.noteHost ?? NoteHost(rootView: LineNote(note: note, session: model))
             host.rootView = LineNote(note: note, session: model)
@@ -229,8 +230,9 @@ final class LatexTextView: STTextView {
             gutter.selectedLineTextColor = NSColor.scribeInk.withAlphaComponent(0.55)
             gutter.selectedLineHighlightColor = .clear
             gutter.font = NSFont.monospacedDigitSystemFont(ofSize: 11.5, weight: .regular)
-            gutter.insets = STRulerInsets(leading: 12, trailing: 14)
-            gutter.minimumThickness = 48
+            // Room on the left for the issue markers.
+            gutter.insets = STRulerInsets(leading: 22, trailing: 14)
+            gutter.minimumThickness = 58
         }
     }
 
@@ -247,6 +249,23 @@ final class LatexTextView: STTextView {
     }
 
     private var pinned: (view: NSView, line: Int)?
+    private var marked: [Int: Diagnostic.Severity] = [:]
+
+    /// An icon in the gutter on each line with an issue, as Xcode marks them. An error outranks a warning on the same line.
+    func markIssues(_ issues: [Diagnostic]) {
+        var lines: [Int: Diagnostic.Severity] = [:]
+        for issue in issues {
+            guard let line = issue.line else { continue }
+            if lines[line] != .error { lines[line] = issue.severity }
+        }
+        guard lines != marked, let gutter = gutterView else { return }
+        for line in marked.keys { gutter.removeMarker(lineNumber: line) }
+        for (line, severity) in lines {
+            gutter.addMarker(STGutterMarker(lineNumber: line, view: IssueMarker(severity: severity)))
+        }
+        marked = lines
+        gutter.needsLayout = true
+    }
 
     /// Keeps `view` at the end of `line` (1-based), or removes the one there.
     func pin(_ view: NSView?, line: Int) {
@@ -515,6 +534,34 @@ struct LatexCompletion: STCompletionItem {
             .foregroundStyle(.ink)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 6))
+    }
+}
+
+/// A gutter marker: the issue's icon, left of the line number. (STTextView
+/// draws numbers over its markers, so the icon can't stand in for one.)
+private final class IssueMarker: NSView {
+    let severity: Diagnostic.Severity
+
+    init(severity: Diagnostic.Severity) {
+        self.severity = severity
+        super.init(frame: .zero)
+        toolTip = severity == .error ? "Error on this line" : "Warning on this line"
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let error = severity == .error
+        let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold)
+            // The mark in the editor's colour, so it shows through the shape.
+            .applying(.init(paletteColors: [.scribeEditor, error ? .scribeMark : .scribeGilt]))
+        guard let icon = NSImage(systemSymbolName: error ? "exclamationmark.circle.fill" : "exclamationmark.triangle.fill",
+                                 accessibilityDescription: error ? "Error" : "Warning")?
+            .withSymbolConfiguration(config) else { return }
+        let size = icon.size
+        icon.draw(in: NSRect(x: bounds.minX + 6, y: bounds.midY - size.height / 2,
+                             width: size.width, height: size.height))
     }
 }
 
