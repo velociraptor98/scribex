@@ -107,6 +107,11 @@ private struct IssueRow: View {
             }
             .fixedSize(horizontal: false, vertical: true)
         }
+        // The whole issue jumps to its line; its buttons keep their own actions.
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(.rect)
+        .onTapGesture { if let line = d.line { model.editor.goto(line) } }
+        .pointerStyle(d.line == nil ? nil : .link)
     }
 }
 
