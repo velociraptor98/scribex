@@ -521,12 +521,15 @@ struct LineNote: View {
             Image(systemName: note.fetchable ? "arrow.down.circle" : "questionmark.folder")
                 .foregroundStyle(.gilt)
             Text("\(Text(note.file).monospaced()) \(note.fetchable ? "isn’t downloaded" : "isn’t in this folder")")
-            if note.fetchable {
-                Button(session.busy ? "Fetching…" : "Fetch") { session.build(allowNetwork: true) }
-                    .disabled(session.busy)
-            } else if session.fileURL != nil {
-                Button("Show Folder", action: session.revealFolder)
+            Group {
+                if note.fetchable {
+                    Button(session.busy ? "Fetching…" : "Fetch") { session.build(allowNetwork: true) }
+                        .disabled(session.busy)
+                } else if session.fileURL != nil {
+                    Button("Show Folder", action: session.revealFolder)
+                }
             }
+            .pointerStyle(.link)
         }
         .font(Fonts.text(12))
         .controlSize(.small)
