@@ -31,6 +31,9 @@ public final class Session {
     private(set) var preview: Preview?
     private(set) var diags: [Diagnostic] = []
     private(set) var busy = false
+    /// A Fetch is downloading. Separate from `busy`, which typing sets on every
+    /// pause; and a fetch runs to the end even when newer builds start.
+    private(set) var fetching = false
     private(set) var missing: String?
     private(set) var absent: String?
     private(set) var sections: [OutlineEntry] = []
@@ -178,8 +181,10 @@ public final class Session {
         seq += 1
         let mine = seq
         busy = true
+        if allowNetwork { fetching = true }
         status = allowNetwork ? "Fetching packages…" : "Typesetting…"
         defer {
+            if allowNetwork { fetching = false }
             if mine == seq {
                 busy = false
                 engine.clearFetched()

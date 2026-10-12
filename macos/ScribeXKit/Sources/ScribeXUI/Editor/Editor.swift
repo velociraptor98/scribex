@@ -586,8 +586,8 @@ struct LineNote: View {
             Text("\(Text(note.file).monospaced()) \(note.fetchable ? "isn’t downloaded" : "isn’t in this folder")")
             Group {
                 if note.fetchable {
-                    Button(session.busy ? "Fetching…" : "Fetch") { session.build(allowNetwork: true) }
-                        .disabled(session.busy)
+                    Button(session.fetching ? "Fetching…" : "Fetch") { session.build(allowNetwork: true) }
+                        .disabled(session.fetching)
                 } else if session.fileURL != nil {
                     Button("Show Folder", action: session.revealFolder)
                 }
