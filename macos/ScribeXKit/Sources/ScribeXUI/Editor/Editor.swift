@@ -289,8 +289,10 @@ final class LatexTextView: STTextView {
         }
         let end = NSRange(location: NSMaxRange(range), length: 0)
         let caret = convert(window.convertFromScreen(firstRect(forCharacterRange: end, actualRange: nil)), from: nil)
-        let size = view.fittingSize
         let right = enclosingScrollView?.documentVisibleRect.maxX ?? bounds.maxX
+        // Narrowed to its icon and button when the whole note would cover the text.
+        (view as? NoteHost)?.fit(in: right - 12 - (caret.maxX + 16))
+        let size = view.fittingSize
         view.frame = NSRect(
             x: right - size.width - 12,
             y: caret.midY - size.height / 2,
@@ -569,6 +571,14 @@ private final class IssueMarker: NSView {
 /// for the I-beam; this claims the note's own area back for the arrow, so its
 /// button reads as a button.
 final class NoteHost: NSHostingView<LineNote> {
+    /// Compact when the full note is wider than `width`.
+    func fit(in width: CGFloat) {
+        var full = rootView
+        full.compact = false
+        let compact = NSHostingView(rootView: full).fittingSize.width > width
+        if rootView.compact != compact { rootView.compact = compact }
+    }
+
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: .arrow)
     }
@@ -578,12 +588,17 @@ final class NoteHost: NSHostingView<LineNote> {
 struct LineNote: View {
     let note: Typesetting.MissingFile
     let session: Session
+    /// Icon and button only, the message moving to the tooltip, where the
+    /// line's text leaves no room for it.
+    var compact = false
 
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: note.fetchable ? "arrow.down.circle" : "questionmark.folder")
                 .foregroundStyle(.gilt)
-            Text("\(Text(note.file).monospaced()) \(note.fetchable ? "isn’t downloaded" : "isn’t in this folder")")
+            if !compact {
+                Text(message)
+            }
             Group {
                 if note.fetchable {
                     Button(session.typesetting.fetching ? "Fetching…" : "Fetch") { session.typesetting.build(allowNetwork: true) }
@@ -600,10 +615,20 @@ struct LineNote: View {
         .padding(.leading, 10)
         .padding(.trailing, 4)
         .padding(.vertical, 3)
+        // Solid, so where a narrow editor leaves no room it covers the text
+        // cleanly rather than mixing with it.
         .background(Color.gilt.opacity(0.14), in: .capsule)
-        .help(note.fetchable
-            ? "Not in the download cache. Fetch downloads it once; it then stays available offline."
-            : "Not part of the TeX distribution: put it in the same folder as the document.")
+        .background(Color(nsColor: .scribeEditor), in: .capsule)
+        .help((compact ? "\(note.file) \(note.fetchable ? "isn’t downloaded" : "isn’t in this folder"). " : "")
+            + (note.fetchable
+                ? "Not in the download cache. Fetch downloads it once; it then stays available offline."
+                : "Not part of the TeX distribution: put it in the same folder as the document."))
+    }
+
+    private var message: AttributedString {
+        var file = AttributedString(note.file)
+        file.font = .system(size: 12, design: .monospaced)
+        return file + AttributedString(note.fetchable ? " isn’t downloaded" : " isn’t in this folder")
     }
 }
 
