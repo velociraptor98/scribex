@@ -67,16 +67,16 @@ struct ExportSheet: View {
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                Button(model.busy ? "Building…" : "Export PDF") {
+                Button(model.typesetting.busy ? "Building…" : "Export PDF") {
                     Task {
-                        guard let pdf = await model.exportPDF(options) else { return }
+                        guard let pdf = await model.typesetting.exportPDF(options) else { return }
                         file = PDFFile(data: pdf)
                         saving = true
                     }
                 }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
-                .disabled(model.busy)
+                .disabled(model.typesetting.busy)
             }
             .buttonBorderShape(.capsule)
         }
@@ -88,8 +88,8 @@ struct ExportSheet: View {
         .fileExporter(isPresented: $saving, document: file, contentType: .pdf,
                       defaultFilename: (model.name as NSString).deletingPathExtension) { result in
             switch result {
-            case let .success(url): if let file { model.exported(file.data, to: url, sourceAlongside: sourceAlongside) }
-            case let .failure(error): model.status = "Export failed: \(error.localizedDescription)"
+            case let .success(url): if let file { model.typesetting.exported(file.data, to: url, sourceAlongside: sourceAlongside) }
+            case let .failure(error): model.typesetting.status = "Export failed: \(error.localizedDescription)"
             }
             dismiss()
         }

@@ -9,11 +9,11 @@ struct Contents: View {
     let caretLine: Int
 
     var body: some View {
-        let sections = model.sections
+        let sections = model.outline.sections
         // Indent relative to the shallowest heading present, so an article whose
         // top level is \section is not pushed in by levels it never uses.
         let base = sections.map(\.level).min() ?? 0
-        let tally = model.tally
+        let tally = model.outline.tally
 
         VStack(alignment: .leading, spacing: 0) {
             Text("Contents").smallCaps().padding(16)

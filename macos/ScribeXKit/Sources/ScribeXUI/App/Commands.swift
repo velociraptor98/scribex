@@ -64,7 +64,7 @@ struct Command: Identifiable {
             Command(id: "saveas", title: "Save As…", keys: KeyboardShortcut("s", modifiers: [.command, .shift]),
                     words: ["copy", "rename"], system: true, isEnabled: open, run: send(#selector(NSDocument.saveAs(_:)))),
             Command(id: "export", title: "Export as PDF…", keys: KeyboardShortcut("e"), words: ["pdf", "print"],
-                    menu: .file, isEnabled: session?.preview != nil) { focus.sheet?.wrappedValue = .export },
+                    menu: .file, isEnabled: session?.typesetting.preview != nil) { focus.sheet?.wrappedValue = .export },
 
             // Format. The palette has richer snippets for these.
             Command(id: "bold", title: "Bold", keys: KeyboardShortcut("b"), menu: .format, inPalette: false,
@@ -74,9 +74,9 @@ struct Command: Identifiable {
 
             // Build.
             Command(id: "build", title: "Build Now", keys: KeyboardShortcut("r"), words: ["compile", "typeset", "rebuild"],
-                    menu: .build, isEnabled: open && session?.busy == false) { session?.build() },
+                    menu: .build, isEnabled: open && session?.typesetting.busy == false) { session?.typesetting.build() },
             Command(id: "live", title: "Build As I Type", words: ["live", "auto", "rebuild"], menu: .build,
-                    isOn: session?.autoBuild ?? false, isEnabled: open) { session?.autoBuild.toggle() },
+                    isOn: session?.typesetting.autoBuild ?? false, isEnabled: open) { session?.typesetting.autoBuild.toggle() },
             Command(id: "prime", title: "Download the LaTeX Essentials", words: ["cache", "offline", "network", "download", "packages", "fonts", "setup"],
                     menu: .setup, isEnabled: engine.cache != .downloading) { engine.setUp() },
 

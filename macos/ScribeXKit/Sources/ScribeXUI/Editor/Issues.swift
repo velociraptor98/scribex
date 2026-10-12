@@ -10,7 +10,7 @@ struct Issues: View {
     @Binding var isExpanded: Bool
 
     var body: some View {
-        let diags = model.visible
+        let diags = model.typesetting.visible
         VStack(spacing: 0) {
             if isExpanded {
                 list(diags)
@@ -24,11 +24,11 @@ struct Issues: View {
                     Text(summary(diags)).smallCaps()
                     Spacer()
                     // Warnings still build, so the outcome is not implied by the count.
-                    Text(model.status)
+                    Text(model.typesetting.status)
                         .font(Fonts.text(11.5)).foregroundStyle(.secondary).monospacedDigit()
                         .lineLimit(1).truncationMode(.tail)
-                        .opacity(model.busy ? 0.6 : 1)
-                        .help(model.status)
+                        .opacity(model.typesetting.busy ? 0.6 : 1)
+                        .help(model.typesetting.status)
                 }
                 .padding(.horizontal, 16)
                 .frame(height: 34)
@@ -58,7 +58,7 @@ struct Issues: View {
                     if d.id != diags.last?.id { Divider() }
                 }
                 if diags.isEmpty {
-                    Text(model.preview != nil ? "No issues — the document built cleanly." : "Nothing built yet.")
+                    Text(model.typesetting.preview != nil ? "No issues — the document built cleanly." : "Nothing built yet.")
                         .italic().foregroundStyle(.secondary)
                 }
             }
@@ -113,7 +113,7 @@ private struct IssueRow: View {
                         Button(fix.label) { model.applyFix(fix) }.buttonStyle(.borderedProminent)
                     }
                     Button("Copy") { copy([d]) }
-                    Button("Ignore") { model.ignore(d) }
+                    Button("Ignore") { model.typesetting.ignore(d) }
                 }
                 .controlSize(.small)
                 .padding(.top, 4)
@@ -126,7 +126,7 @@ private struct IssueRow: View {
         .onTapGesture { if let line = d.line { model.editor.goto(line) } }
         .contextMenu {
             Button("Copy Issue") { copy([d]) }
-            Button("Copy All Issues") { copy(model.visible) }
+            Button("Copy All Issues") { copy(model.typesetting.visible) }
         }
         .pointerStyle(d.line == nil ? nil : .link)
         .help(d.line.map { "Go to line \($0)" } ?? "")

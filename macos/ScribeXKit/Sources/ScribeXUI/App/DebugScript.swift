@@ -78,16 +78,16 @@ public enum DebugScript {
         case "page":
             // Neither snapshot route captures PDFKit's page tiles, so this
             // renders the page itself.
-            if let page = session?.preview?.document.page(at: 0) {
+            if let page = session?.typesetting.preview?.document.page(at: 0) {
                 let image = page.thumbnail(of: NSSize(width: 600, height: 800), for: .mediaBox)
                 if let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff) {
                     try? rep.representation(using: .png, properties: [:])?.write(to: out.appending(path: "\(arg).png"))
                 }
             }
-        case "fetch": session?.build(allowNetwork: true)
+        case "fetch": session?.typesetting.build(allowNetwork: true)
         case "essentials": session?.setUp()
         case "state":
-            print("debug state [\(arg)]: text=\(session?.source.prefix(25).debugDescription ?? "-") key=\(NSApp.keyWindow?.title ?? "-") fr=\(String(describing: type(of: NSApp.keyWindow?.firstResponder as Any))) status=\(session?.status ?? "-") busy=\(session?.busy ?? false) windows=\(NSApp.windows.filter(\.isVisible).map { "\($0.title) edited=\($0.isDocumentEdited) full=\($0.styleMask.contains(.fullScreen)) size=\(Int($0.frame.width))x\(Int($0.frame.height))" })")
+            print("debug state [\(arg)]: text=\(session?.source.prefix(25).debugDescription ?? "-") key=\(NSApp.keyWindow?.title ?? "-") fr=\(String(describing: type(of: NSApp.keyWindow?.firstResponder as Any))) status=\(session?.typesetting.status ?? "-") busy=\(session?.typesetting.busy ?? false) windows=\(NSApp.windows.filter(\.isVisible).map { "\($0.title) edited=\($0.isDocumentEdited) full=\($0.styleMask.contains(.fullScreen)) size=\(Int($0.frame.width))x\(Int($0.frame.height))" })")
         case "key":
             // Real key events through the window, as typing would send them.
             guard let window = front else { break }

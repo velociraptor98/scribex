@@ -160,7 +160,9 @@ no Screen Recording permission; see `DebugScript.swift`.
 | `macos/ScribeXKit/Sources/ScribeXCore/Content/Templates.swift` | Starter templates; their LaTeX is in `Resources/Templates` |
 | `macos/ScribeXKit/Sources/ScribeXUI/Editor/TexDocument.swift` | The .tex document type; the document system does the file handling |
 | `macos/ScribeXKit/Sources/ScribeXUI/App/Engine.swift` | Shared by all windows: the typesetter and its download cache |
-| `macos/ScribeXKit/Sources/ScribeXUI/Editor/Session.swift` | One window: builds, preview, issues, zoom, export |
+| `macos/ScribeXKit/Sources/ScribeXUI/Editor/Session.swift` | One window's model: the document, its editor, and edits routed to the two below |
+| `macos/ScribeXKit/Sources/ScribeXUI/Editor/Typesetting.swift` | Builds as you type, the preview, issues, missing files, Fetch, export |
+| `macos/ScribeXKit/Sources/ScribeXUI/Editor/Outline.swift` | The headings and counts the sidebar shows |
 | `macos/ScribeXKit/Sources/ScribeXUI/App/Commands.swift` | Every command, defined once for the menu bar and the ⌘K palette |
 | `macos/ScribeXKit/Sources/ScribeXUI/App/MenuBar.swift` | Lays the commands out in the menus, acting on the front window through `@FocusedValue` |
 | `macos/ScribeXKit/Sources/ScribeXUI/Editor/Editor.swift` | STTextView setup, LaTeX colouring, brackets, completion |

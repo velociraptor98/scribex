@@ -104,8 +104,8 @@ struct Editor: NSViewRepresentable {
         context.coordinator.undoManager = context.environment.undoManager
         context.coordinator.caretLine = $caretLine
         let view = scroll.documentView as! LatexTextView
-        view.markIssues(model.visible)
-        if let note = model.missingFile {
+        view.markIssues(model.typesetting.visible)
+        if let note = model.typesetting.missingFile {
             let host = context.coordinator.noteHost ?? NoteHost(rootView: LineNote(note: note, session: model))
             host.rootView = LineNote(note: note, session: model)
             context.coordinator.noteHost = host
@@ -576,7 +576,7 @@ final class NoteHost: NSHostingView<LineNote> {
 
 /// Pinned to the line that asked for a file the build lacked.
 struct LineNote: View {
-    let note: Session.MissingFile
+    let note: Typesetting.MissingFile
     let session: Session
 
     var body: some View {
@@ -586,8 +586,8 @@ struct LineNote: View {
             Text("\(Text(note.file).monospaced()) \(note.fetchable ? "isn’t downloaded" : "isn’t in this folder")")
             Group {
                 if note.fetchable {
-                    Button(session.fetching ? "Fetching…" : "Fetch") { session.build(allowNetwork: true) }
-                        .disabled(session.fetching)
+                    Button(session.typesetting.fetching ? "Fetching…" : "Fetch") { session.typesetting.build(allowNetwork: true) }
+                        .disabled(session.typesetting.fetching)
                 } else if session.fileURL != nil {
                     Button("Show Folder", action: session.revealFolder)
                 }

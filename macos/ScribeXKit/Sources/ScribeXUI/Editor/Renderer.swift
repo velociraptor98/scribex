@@ -34,14 +34,14 @@ struct Renderer: View {
                 Spacer(minLength: 0)
                 zoomControls
                 Button("Export PDF…", action: export)
-                    .disabled(model.preview == nil || model.busy)
+                    .disabled(model.typesetting.preview == nil || model.typesetting.busy)
             }
             .controlSize(.small)
             .monospacedDigit()
             .padding(12)
 
-            Pages(preview: model.preview, zoom: zoom, onScale: { zoom.scale = $0 })
-                .overlay { if model.preview == nil { Text("Nothing built yet").italic().foregroundStyle(.secondary) } }
+            Pages(preview: model.typesetting.preview, zoom: zoom, onScale: { zoom.scale = $0 })
+                .overlay { if model.typesetting.preview == nil { Text("Nothing built yet").italic().foregroundStyle(.secondary) } }
                 .frame(maxHeight: .infinity)
         }
         .background(.sunken)
@@ -68,7 +68,7 @@ struct Renderer: View {
 
 /// PDFKit's view of the pages, kept in place across rebuilds.
 private struct Pages: NSViewRepresentable {
-    var preview: Session.Preview?
+    var preview: Typesetting.Preview?
     var zoom: Zoom
     var onScale: (Double) -> Void
 

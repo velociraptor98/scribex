@@ -54,7 +54,7 @@ public struct DocumentView: View {
                 Palette(commands: Command.all(focus, engine: session.engine),
                         hasSelection: !session.editor.selectedText.isEmpty, insert: session.insert)
             case .export:
-                if let preview = session.preview {
+                if let preview = session.typesetting.preview {
                     ExportSheet(model: session, pdf: preview.data, documentSheet: sheetOf(session.source))
                 }
             }
@@ -76,7 +76,7 @@ public struct DocumentView: View {
             .sharedBackgroundVisibility(.hidden)
             ToolbarItemGroup(placement: .primaryAction) {
                 Button("Issues", systemImage: "rectangle.bottomthird.inset.filled") { panels.issues.toggle() }
-                    .badge(session.visible.count)
+                    .badge(session.typesetting.visible.count)
                     .help(panels.issues ? "Hide the issues (⇧⌘M)" : "Show the issues (⇧⌘M)")
                 Button("Preview", systemImage: "sidebar.right") { panels.preview.toggle() }
                     .help(panels.preview ? "Hide the preview (⌥⌘P)" : "Show the preview (⌥⌘P)")
@@ -88,9 +88,9 @@ public struct DocumentView: View {
         .focusedSceneValue(\.session, session)
         .onChange(of: fileURL) { _, url in session.fileURL = url }
         .onChange(of: session.engine.cache) { _, cache in
-            if cache == .ready { session.build() }
+            if cache == .ready { session.typesetting.build() }
         }
-        .onAppear { session.scheduleBuild() }
+        .onAppear { session.typesetting.scheduleBuild() }
         .background(WindowProbe { window in
             // A document is open; the welcome window has done its job.
             // If it was full screen, this window takes its place there.
