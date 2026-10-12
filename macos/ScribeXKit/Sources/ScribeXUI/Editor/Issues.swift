@@ -68,6 +68,19 @@ struct Issues: View {
     }
 }
 
+/// Issues as plain text, one block each: where, what, and TeX's own words.
+private func copy(_ issues: [Diagnostic]) {
+    let text = issues.map { d in
+        [
+            (d.line.map { "Line \($0): " } ?? "") + (d.severity == .error ? "Error: " : "Warning: ") + d.title,
+            d.detail,
+            d.raw == d.title ? nil : "TeX: \(d.raw)",
+        ].compactMap { $0 }.joined(separator: "\n")
+    }.joined(separator: "\n\n")
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(text, forType: .string)
+}
+
 private struct IssueRow: View {
     let model: Session
     let diagnostic: Diagnostic
@@ -110,6 +123,10 @@ private struct IssueRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(.rect)
         .onTapGesture { if let line = d.line { model.editor.goto(line) } }
+        .contextMenu {
+            Button("Copy Issue") { copy([d]) }
+            Button("Copy All Issues") { copy(model.visible) }
+        }
         .pointerStyle(d.line == nil ? nil : .link)
         .help(d.line.map { "Go to line \($0)" } ?? "")
     }
