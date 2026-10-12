@@ -55,12 +55,12 @@ struct Issues: View {
             VStack(alignment: .leading, spacing: 16) {
                 ForEach(diags) { d in
                     IssueRow(model: model, diagnostic: d)
-                    Divider()
+                    if d.id != diags.last?.id { Divider() }
                 }
-                Text(diags.isEmpty
-                    ? model.preview != nil ? "No issues — the document built cleanly." : "Nothing built yet."
-                    : "Everything else built cleanly.")
-                    .italic().foregroundStyle(.secondary)
+                if diags.isEmpty {
+                    Text(model.preview != nil ? "No issues — the document built cleanly." : "Nothing built yet.")
+                        .italic().foregroundStyle(.secondary)
+                }
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -112,6 +112,7 @@ private struct IssueRow: View {
                     ForEach(d.fixes, id: \.self) { fix in
                         Button(fix.label) { model.applyFix(fix) }.buttonStyle(.borderedProminent)
                     }
+                    Button("Copy") { copy([d]) }
                     Button("Ignore") { model.ignore(d) }
                 }
                 .controlSize(.small)

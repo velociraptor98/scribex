@@ -216,6 +216,16 @@ private func translate(_ raw: String, line: Int?, context ctx: LogContext) -> Di
         )
     }
 
+    if raw.contains("no legal \\end found") {
+        return Diagnostic(
+            severity: .error,
+            title: "The document never ends",
+            detail: "TeX reached the end of the file still inside the document. Add \\end{document} as the last line.",
+            raw: raw,
+            line: nil
+        )
+    }
+
     if raw.hasPrefix("Runaway argument") {
         return Diagnostic(
             severity: .error,
