@@ -150,7 +150,7 @@ no Screen Recording permission; see `DebugScript.swift`.
 | `engine/src/bin/scribex-typeset.rs` | The worker binary the app launches for each build |
 | `macos/ScribeX/` | The app target: entry point and icon |
 | `macos/ScribeXKit/Sources/ScribeXCore/Typesetter.swift` | Runs builds in the worker, one at a time; first-run download |
-| `macos/ScribeXKit/Sources/ScribeXCore/DocumentFiles.swift` | Export, and the source written alongside an export |
+| `macos/ScribeXKit/Sources/ScribeXCore/Exporting.swift` | Export options: paper size and hyperlinks, applied to the source for a throwaway build |
 | `macos/ScribeXKit/Sources/ScribeXCore/Latex/Issues.swift` | Turns the TeX log into issues, with plain-English titles and fixes |
 | `macos/ScribeXKit/Sources/ScribeXCore/Latex/Outline.swift` | Headings with LaTeX's numbering, document counts, the title |
 | `macos/ScribeXKit/Sources/ScribeXCore/Latex/Bibliography.swift` | Cited keys and the entries in .bib files |

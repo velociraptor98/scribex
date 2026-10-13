@@ -32,8 +32,7 @@ final class Typesetting {
     /// A Fetch is downloading. Separate from `busy`, which typing sets on every
     /// pause; and a fetch runs to the end even when newer builds start.
     private(set) var fetching = false
-    private(set) var missing: String?
-    private(set) var absent: String?
+    private var missingNote: MissingFile?
     private(set) var ignored: Set<String> = []
     /// One line on how the last build or action went, under the preview.
     var status = "Ready"
@@ -70,14 +69,21 @@ final class Typesetting {
 
     var missingFile: MissingFile? {
         // Before setup every package is missing; the setup banner covers that.
-        guard let file = absent ?? (engine.cache == .ready ? missing : nil) else { return nil }
+        missingNote?.fetchable == false || engine.cache == .ready ? missingNote : nil
+    }
+
+    /// Found once per build rather than on every redraw that reads it.
+    private static func note(
+        missing: String?, absent: String?, in source: String, issues: [Diagnostic]
+    ) -> MissingFile? {
+        guard let file = absent ?? missing else { return nil }
         // The line that names it (\usepackage{cancel}, \includegraphics{figure.png}),
         // else where TeX stopped (a font comes from no line), else the first.
         let stem = NSRegularExpression.escapedPattern(for: (file as NSString).deletingPathExtension)
         let names = source.components(separatedBy: "\n").firstIndex {
             $0.range(of: "[{,]\\s*\(stem)[.\\w]*\\s*[,}]", options: .regularExpression) != nil
         }
-        let line = names.map { $0 + 1 } ?? visible.lazy.compactMap(\.line).first ?? 1
+        let line = names.map { $0 + 1 } ?? issues.lazy.compactMap(\.line).first ?? 1
         return MissingFile(file: file, line: line, fetchable: absent == nil)
     }
 
@@ -151,7 +157,7 @@ final class Typesetting {
             }
             previewCount += 1
             preview = Preview(id: previewCount, data: r.pdf, document: document)
-            show(parsed, missing: nil, absent: nil)
+            show(parsed, missing: nil, absent: nil, in: src)
             status = "Built in \(r.durationMs) ms"
         } catch {
             // Leave the status alone: the newer build owns it now.
@@ -159,7 +165,7 @@ final class Typesetting {
             if error.isColdCache {
                 // Not the document's fault: point at the setup instead of listing issues.
                 engine.noteColdCache()
-                show([], missing: nil, absent: nil)
+                show([], missing: nil, absent: nil, in: src)
                 status = "Waiting for the one-time download"
                 return
             }
@@ -167,7 +173,7 @@ final class Typesetting {
             context.absentFiles = Set([error.absentFile].compactMap { $0 })
             let parsed = await Self.read(error.log, context: context)
             guard mine == seq else { return }
-            show(parsed, missing: error.missingFile, absent: error.absentFile)
+            show(parsed, missing: error.missingFile, absent: error.absentFile, in: src)
             status = error.missingFile.map { "Missing: \($0)" }
                 ?? error.absentFile.map { "Not found: \($0)" }
                 ?? "Build failed"
@@ -176,11 +182,10 @@ final class Typesetting {
         }
     }
 
-    private func show(_ parsed: [Diagnostic], missing: String?, absent: String?) {
+    private func show(_ parsed: [Diagnostic], missing: String?, absent: String?, in src: String) {
         diags = parsed
         ignored = []
-        self.missing = missing
-        self.absent = absent
+        missingNote = Self.note(missing: missing, absent: absent, in: src, issues: parsed)
     }
 
     /// Off the main thread: a long log runs to thousands of lines.
