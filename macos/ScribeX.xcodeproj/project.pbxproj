@@ -212,7 +212,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
@@ -223,7 +223,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = "0.0.5-alpha";
+				MARKETING_VERSION = "0.0.6-alpha";
 				PRODUCT_BUNDLE_IDENTIFIER = com.kunalsingh.scribex;
 				PRODUCT_NAME = ScribeX;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -240,7 +240,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
@@ -251,7 +251,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = "0.0.5-alpha";
+				MARKETING_VERSION = "0.0.6-alpha";
 				PRODUCT_BUNDLE_IDENTIFIER = com.kunalsingh.scribex;
 				PRODUCT_NAME = ScribeX;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;

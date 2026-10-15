@@ -28,7 +28,13 @@ final class Typesetting {
 
     private(set) var preview: Preview?
     private(set) var diags: [Diagnostic] = []
+    /// From reading the source, so they show without a build, and even when
+    /// the build they warn about never finishes.
+    private(set) var checks: [Diagnostic] = []
     private(set) var busy = false
+    /// Building an export variant, which Stop does not reach: the export sheet
+    /// owns that build and saves what it returns.
+    private(set) var exporting = false
     /// A Fetch is downloading. Separate from `busy`, which typing sets on every
     /// pause; and a fetch runs to the end even when newer builds start.
     private(set) var fetching = false
@@ -44,15 +50,24 @@ final class Typesetting {
     @ObservationIgnored private var previewCount = 0
     @ObservationIgnored private var bib: (keys: [String], name: String?) = ([], nil)
     @ObservationIgnored private var pendingBuild: Task<Void, Never>?
+    @ObservationIgnored private var building: Task<Void, Never>?
+    @ObservationIgnored private var pendingCheck: Task<Void, Never>?
+    /// CPU seconds a preview may take: several times this document's last
+    /// build, so a loop is caught in seconds rather than at the full limit that
+    /// Build Now allows. Nil until a build succeeds, so a long document's first
+    /// build is not cut short before anything says how long it takes.
+    @ObservationIgnored private var previewLimit: Int?
 
     init(document: TexDocument, engine: Engine) {
         self.document = document
         self.engine = engine
         scratch = engine.scratchEntry()
+        let text = document.text
+        pendingCheck = Task { checks = await Self.check(text) }
     }
 
     private var source: String { document.text }
-    var visible: [Diagnostic] { diags.filter { !ignored.contains($0.key) } }
+    var visible: [Diagnostic] { (diags + checks).filter { !ignored.contains($0.key) } }
 
     func ignore(_ d: Diagnostic) {
         ignored.insert(d.key)
@@ -102,10 +117,34 @@ final class Typesetting {
 
     /// Builds never use the network, except this one when `allowNetwork` is
     /// set: "Fetch it", the user's explicit go-ahead for a missing package.
-    func build(allowNetwork: Bool = false) {
+    func build(allowNetwork: Bool = false, asPreview: Bool = false) {
         pendingBuild?.cancel()
         let src = source
-        Task { await runBuild(src, allowNetwork: allowNetwork) }
+        building = Task { await runBuild(src, allowNetwork: allowNetwork, asPreview: asPreview) }
+    }
+
+    /// Checks wait for the same pause as a build: mid-word, a definition is
+    /// often briefly one that uses itself.
+    func edited() {
+        pendingCheck?.cancel()
+        pendingCheck = Task {
+            try? await Task.sleep(for: Self.debounce)
+            guard !Task.isCancelled else { return }
+            let found = await Self.check(source)
+            if !Task.isCancelled { checks = found }
+        }
+        scheduleBuild()
+    }
+
+    func stop() {
+        pendingBuild?.cancel()
+        building?.cancel()
+        // The stopped build may take a moment to end, or wait behind another
+        // job first; retiring its number keeps its ticker off the status.
+        seq += 1
+        busy = false
+        engine.clearFetched()
+        status = "Stopped"
     }
 
     func scheduleBuild() {
@@ -113,18 +152,28 @@ final class Typesetting {
         guard autoBuild, !engine.locked else { return }
         pendingBuild = Task {
             try? await Task.sleep(for: Self.debounce)
-            if !Task.isCancelled { build() }
+            if !Task.isCancelled { build(asPreview: true) }
         }
     }
 
-    private func runBuild(_ src: String, allowNetwork: Bool) async {
+    private func runBuild(_ src: String, allowNetwork: Bool, asPreview: Bool) async {
         let target = fileURL ?? scratch
         seq += 1
         let mine = seq
         busy = true
         if allowNetwork { fetching = true }
         status = allowNetwork ? "Fetching packages…" : "Typesetting…"
+        // A long build shows it is still going, and how to end it.
+        let ticker = allowNetwork ? nil : Task {
+            let started = ContinuousClock.now
+            try? await Task.sleep(for: .seconds(5))
+            while !Task.isCancelled, mine == seq {
+                status = "Typesetting… \(Int((ContinuousClock.now - started) / .seconds(1))) s — ⌘. to stop"
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
         defer {
+            ticker?.cancel()
             if allowNetwork { fetching = false }
             if mine == seq {
                 busy = false
@@ -133,6 +182,7 @@ final class Typesetting {
         }
 
         let context = LogContext(source: src, bibKeys: bib.keys, bibName: bib.name)
+        let limit = asPreview ? previewLimit : nil
         do throws(BuildError) {
             let r = try await engine.typesetter.typeset(
                 entry: target,
@@ -140,8 +190,11 @@ final class Typesetting {
                 onlyCached: !allowNetwork,
                 // A fetch fills the shared cache, so it runs even once superseded.
                 ifSuperseded: allowNetwork ? .run : .drop,
+                timeLimit: limit,
                 onFetch: engine.fetchHandler
             )
+            // A download's time is the network's, not TeX's.
+            if !allowNetwork { previewLimit = min(Typesetter.timeLimit, max(10, (r.durationMs * 5 + 999) / 1000)) }
             guard mine == seq else { return }
             let parsed = await Self.read(r.log, context: context)
             guard mine == seq else { return }
@@ -154,8 +207,14 @@ final class Typesetting {
             show(parsed, missing: nil, absent: nil)
             status = "Built in \(r.durationMs) ms"
         } catch {
-            // Leave the status alone: the newer build owns it now.
+            // Leave the status alone: the newer build, or whoever stopped this one, owns it now.
             if error.superseded || mine != seq { return }
+            if error.timedOut {
+                let shortened = limit.map { $0 < Typesetter.timeLimit } ?? false
+                show([Self.neverFinished(seconds: error.durationMs / 1000, shortened: shortened)], missing: nil, absent: nil)
+                status = error.message
+                return
+            }
             if error.isColdCache {
                 // Not the document's fault: point at the setup instead of listing issues.
                 engine.noteColdCache()
@@ -183,6 +242,25 @@ final class Typesetting {
         self.absent = absent
     }
 
+    /// The worker was stopped before it wrote a log, so there is nothing to parse.
+    private static func neverFinished(seconds: Int, shortened: Bool) -> Diagnostic {
+        let title = "The build never finished"
+        return Diagnostic(
+            severity: .error,
+            title: title,
+            detail: "TeX was still running after \(seconds) s, so it was stopped. That usually means the "
+                + "document loops forever: a command defined in terms of itself, such as "
+                + "\\renewcommand{\\vec}[1]{\\vec{…}}, or a \\loop that never ends."
+                + (shortened ? " If the document is only slow, Build Now (⌘R) gives it \(Typesetter.timeLimit) s." : ""),
+            raw: title
+        )
+    }
+
+    /// Off the main thread, like the log: it reads the whole document.
+    private nonisolated static func check(_ source: String) async -> [Diagnostic] {
+        sourceIssues(source)
+    }
+
     /// Off the main thread: a long log runs to thousands of lines.
     private nonisolated static func read(
         _ log: String, context: LogContext
@@ -198,9 +276,11 @@ final class Typesetting {
         guard let shown = preview?.data else { return nil }
         guard options.needsRebuild(documentSheet: sheetOf(source)) else { return shown }
         busy = true
+        exporting = true
         status = "Building for export…"
         defer {
             busy = false
+            exporting = false
             engine.clearFetched()
             // Restore the preview's build output, which the export build replaced.
             build()

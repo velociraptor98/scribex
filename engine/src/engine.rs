@@ -137,24 +137,29 @@ fn ensure_real_dir(dir: &Path) -> Result<(), String> {
 /// overwrite any file the user can (`~/.zshrc`, a LaunchAgent). Only plain names
 /// are written here, and an existing entry is replaced rather than written
 /// through, so a planted symlink cannot redirect the write either.
+///
+/// Each file is written aside and renamed into place: the app kills a worker
+/// whose build is superseded, and a half-written `.aux` would break the next run.
 fn write_outputs(files: &MemoryFileCollection, out_dir: &Path) -> Result<(), String> {
     for (name, file) in files {
         if !is_plain_name(name) || file.data.is_empty() {
             continue;
         }
-        let dest = out_dir.join(name);
-        match std::fs::remove_file(&dest) {
+        let partial = out_dir.join(format!(".{name}.partial"));
+        match std::fs::remove_file(&partial) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => return Err(format!("cannot replace {name}: {e}")),
         }
         // `create_new` is O_EXCL, which also refuses to follow a symlink that
-        // appeared since the removal.
+        // appeared since the removal; `rename` replaces a symlink at the
+        // destination rather than following it.
         std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
-            .open(&dest)
+            .open(&partial)
             .and_then(|mut f| f.write_all(&file.data))
+            .and_then(|()| std::fs::rename(&partial, out_dir.join(name)))
             .map_err(|e| format!("cannot write {name}: {e}"))?;
     }
     Ok(())

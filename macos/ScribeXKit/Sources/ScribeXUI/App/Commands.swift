@@ -75,6 +75,8 @@ struct Command: Identifiable {
             // Build.
             Command(id: "build", title: "Build Now", keys: KeyboardShortcut("r"), words: ["compile", "typeset", "rebuild"],
                     menu: .build, isEnabled: open && session?.typesetting.busy == false) { session?.typesetting.build() },
+            Command(id: "stop", title: "Stop Build", keys: KeyboardShortcut("."), words: ["cancel", "halt", "abort", "typeset"],
+                    menu: .build, isEnabled: open && session?.typesetting.busy == true && session?.typesetting.exporting == false) { session?.typesetting.stop() },
             Command(id: "live", title: "Build As I Type", words: ["live", "auto", "rebuild"], menu: .build,
                     isOn: session?.typesetting.autoBuild ?? false, isEnabled: open) { session?.typesetting.autoBuild.toggle() },
             Command(id: "prime", title: "Download the LaTeX Essentials", words: ["cache", "offline", "network", "download", "packages", "fonts", "setup"],

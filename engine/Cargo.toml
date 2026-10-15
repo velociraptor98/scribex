@@ -1,6 +1,6 @@
 [package]
 name = "scribex-engine"
-version = "0.0.5-alpha"
+version = "0.0.6-alpha"
 description = "Tectonic typesetting for ScribeX, run in a crash-isolated worker process"
 authors = ["Kunal Singh"]
 edition = "2021"
@@ -13,6 +13,7 @@ name = "scribex-typeset"
 path = "src/bin/scribex-typeset.rs"
 
 [dependencies]
+libc = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

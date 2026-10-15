@@ -41,7 +41,7 @@ public final class Session {
     func edit(_ text: String) {
         document.text = text
         outline.update(text)
-        typesetting.scheduleBuild()
+        typesetting.edited()
     }
 
     func insert(_ text: String) {

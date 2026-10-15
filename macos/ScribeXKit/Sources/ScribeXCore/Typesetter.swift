@@ -3,6 +3,7 @@
 // engine/src/worker.rs.
 
 import Foundation
+import Synchronization
 
 public struct Build: Sendable {
     public var pdf: Data
@@ -19,12 +20,16 @@ public struct BuildError: Error, Sendable {
     /// expects beside it.
     public var absentFile: String?
     public var durationMs: Int
-    /// A newer build replaced this one before it ran. Not a failure to report.
+    /// Dropped or stopped for a newer build of the same document, or because
+    /// its caller cancelled it. Not a failure to report.
     public var superseded: Bool
+    /// Stopped for running too long: most likely a document that loops forever.
+    public var timedOut: Bool
 
     public init(
         _ message: String, log: String = "", missingFile: String? = nil,
-        absentFile: String? = nil, durationMs: Int = 0, superseded: Bool = false
+        absentFile: String? = nil, durationMs: Int = 0, superseded: Bool = false,
+        timedOut: Bool = false
     ) {
         self.message = message
         self.log = log
@@ -32,23 +37,32 @@ public struct BuildError: Error, Sendable {
         self.absentFile = absentFile
         self.durationMs = durationMs
         self.superseded = superseded
+        self.timedOut = timedOut
     }
 
     static let supersededByNewer = BuildError("superseded by a newer build", superseded: true)
+    static let cancelled = BuildError("cancelled", superseded: true)
+
+    static func timedOut(after seconds: Int) -> BuildError {
+        BuildError("Stopped after \(seconds) s", durationMs: seconds * 1000, timedOut: true)
+    }
 
     /// A build that failed because nothing has been downloaded yet: without the
     /// format file the engine cannot even start, so the log says nothing useful.
     public var isColdCache: Bool { message.contains("tectonic-format-") }
 }
 
-/// Jobs run one at a time. Every build for a document writes the same
-/// `.scribex-build` directory, so two workers at once interleave their
-/// `.aux`/`.log`/`.pdf` writes: multi-pass documents stop converging, and we
-/// could read back the *other* run's PDF. Live preview makes overlap the norm,
-/// since a compile outlasts the 600 ms debounce.
+/// Jobs run one at a time per build directory. Every build for a document
+/// writes the same `.scribex-build` directory, so two workers at once interleave
+/// their `.aux`/`.log`/`.pdf` writes: multi-pass documents stop converging, and
+/// we could read back the *other* run's PDF. Live preview makes overlap the
+/// norm, since a compile outlasts the 600 ms debounce. Documents in different
+/// folders build side by side, so one that never finishes holds up no other.
 ///
-/// Queued previews are dropped once a newer one exists, which keeps the editor
-/// from falling a build behind after a burst of typing.
+/// A preview is dropped once a newer one for the same document exists, and
+/// stopped if it is already running, which keeps the editor from falling a
+/// build behind after a burst of typing, and lets fixing a document that loops
+/// forever take effect at once.
 public actor Typesetter {
     /// Dropping is only safe when the job's output is all it was for. A job that
     /// fetches resources also fills the shared cache, which outlives the unwanted
@@ -60,15 +74,40 @@ public actor Typesetter {
     /// Its absence makes the app offer the first-run download.
     static let readyMarker = "cache-ready"
 
+    /// CPU seconds an offline build may take, unless the caller sets its own.
+    public static let timeLimit = 30
+
     private let worker: URL
-    private var latest: UInt64 = 0
-    /// Held for the whole job, PDF read included, so the bytes we return are the
-    /// ones our own worker wrote.
-    private var running = false
-    private var waiting: [CheckedContinuation<Void, Never>] = []
+    /// CPU seconds before the worker is stopped. Real documents take a second
+    /// or two; a download also spends CPU on decompression and on building the
+    /// format file.
+    private let cpuLimit: (offline: Int, online: Int)
+    /// Wall-clock seconds, for a job that hangs without spending CPU. Downloads
+    /// take as long as the connection makes them, so only offline builds have one.
+    private let wallLimit: Int
+    private var tickets: UInt64 = 0
+    /// By build directory. Forgotten when idle, tickets and all, since no job
+    /// is left to compare against them.
+    private var lanes: [String: Lane] = [:]
+
+    private struct Lane {
+        /// Held for the whole job, PDF read included, so the bytes we return
+        /// are the ones our own worker wrote.
+        var running = false
+        var waiting: [CheckedContinuation<Void, Never>] = []
+        /// The newest ticket for each document that builds here.
+        var latest: [String: UInt64] = [:]
+        var current: (document: String, droppable: Bool, job: WorkerJob)?
+    }
 
     public init(worker: URL) {
+        self.init(worker: worker, cpuLimit: (offline: Self.timeLimit, online: 300), wallLimit: Self.timeLimit * 2)
+    }
+
+    init(worker: URL, cpuLimit: (offline: Int, online: Int), wallLimit: Int) {
         self.worker = worker
+        self.cpuLimit = cpuLimit
+        self.wallLimit = wallLimit
         // A worker that dies before reading its request would otherwise take the
         // app down with it: writing to its closed stdin raises SIGPIPE.
         signal(SIGPIPE, SIG_IGN)
@@ -84,31 +123,61 @@ public actor Typesetter {
 
     /// The file at `entry` is neither read nor written; its directory is where
     /// `\input` and `\includegraphics` resolve. `onFetch` is called on a
-    /// background thread.
+    /// background thread. `timeLimit`, in CPU seconds, replaces the default for
+    /// an offline build, and allows twice that on the clock.
     public func typeset(
         entry: URL,
         source: String,
         onlyCached: Bool,
         ifSuperseded: IfSuperseded = .drop,
+        timeLimit: Int? = nil,
         onFetch: @escaping @Sendable (String) -> Void = { _ in }
     ) async throws(BuildError) -> Build {
+        let outDir = Self.outputDirectory(for: entry).path
+        // Two spellings of one folder (through a symlink, say) must still share
+        // a lane: their workers would write the same build directory.
+        let lane = entry.deletingLastPathComponent().resolvingSymlinksInPath().path
+        let document = entry.path
         // Claimed even by jobs that will not drop themselves, so that they still
-        // supersede the previews queued ahead of them.
-        latest += 1
-        let ticket = latest
-        await acquire()
-        defer { release() }
-        if ifSuperseded == .drop, latest > ticket {
+        // supersede the previews queued or running ahead of them.
+        tickets += 1
+        let ticket = tickets
+        lanes[lane, default: Lane()].latest[document] = ticket
+        if let current = lanes[lane]?.current, current.document == document, current.droppable {
+            current.job.stop(.superseded)
+        }
+        await acquire(lane)
+        defer { release(lane) }
+        if Task.isCancelled {
+            throw .cancelled
+        }
+        if ifSuperseded == .drop, lanes[lane]!.latest[document]! > ticket {
             throw .supersededByNewer
         }
 
+        let job = WorkerJob()
+        lanes[lane]!.current = (document, ifSuperseded == .drop, job)
+        defer { lanes[lane]?.current = nil }
         let request = WorkerRequest(
             entry: entry.path,
             source: source,
-            outDir: Self.outputDirectory(for: entry).path,
-            onlyCached: onlyCached
+            outDir: outDir,
+            onlyCached: onlyCached,
+            cpuLimit: onlyCached ? timeLimit ?? cpuLimit.offline : cpuLimit.online
         )
-        switch await Self.run(worker, request, onFetch: onFetch) {
+        let wall = onlyCached ? timeLimit.map { $0 * 2 } ?? wallLimit : nil
+        let response = await withTaskCancellationHandler {
+            await Self.run(worker, request, job: job, wallLimit: wall, onFetch: onFetch)
+        } onCancel: {
+            job.stop(.cancelled)
+        }
+        switch response {
+        case .stopped(.superseded):
+            throw .supersededByNewer
+        case .stopped(.cancelled):
+            throw .cancelled
+        case let .stopped(.timedOut(seconds)):
+            throw .timedOut(after: seconds)
         case let .ok(log, durationMs):
             do {
                 let pdf = try Data(contentsOf: Self.pdfURL(for: entry))
@@ -162,21 +231,51 @@ public actor Typesetter {
         return Int((ContinuousClock.now - started) / .milliseconds(1))
     }
 
-    private func acquire() async {
-        if !running {
-            running = true
+    private func acquire(_ lane: String) async {
+        if !lanes[lane]!.running {
+            lanes[lane]!.running = true
             return
         }
-        await withCheckedContinuation { waiting.append($0) }
+        await withCheckedContinuation { lanes[lane]!.waiting.append($0) }
     }
 
-    private func release() {
-        if waiting.isEmpty {
-            running = false
+    private func release(_ lane: String) {
+        if lanes[lane]!.waiting.isEmpty {
+            lanes[lane] = nil
         } else {
-            waiting.removeFirst().resume()
+            lanes[lane]!.waiting.removeFirst().resume()
         }
     }
+}
+
+/// One worker run, which the actor can stop while a background thread waits
+/// for it to finish.
+final class WorkerJob: Sendable {
+    enum Stop: Sendable {
+        case superseded, cancelled
+        case timedOut(seconds: Int)
+    }
+
+    private let state = Mutex<(process: Process?, stop: Stop?)>((nil, nil))
+
+    /// The first reason given is the one reported. A job stopped before its
+    /// worker starts is ended as soon as it does.
+    func stop(_ reason: Stop) {
+        state.withLock {
+            if $0.stop == nil { $0.stop = reason }
+            // Once it has exited, its pid may already belong to another process.
+            if $0.process?.isRunning == true { $0.process?.terminate() }
+        }
+    }
+
+    func started(_ process: Process) {
+        state.withLock {
+            $0.process = process
+            if $0.stop != nil { process.terminate() }
+        }
+    }
+
+    var stopped: Stop? { state.withLock { $0.stop } }
 }
 
 struct WorkerRequest: Encodable {
@@ -184,17 +283,23 @@ struct WorkerRequest: Encodable {
     var source: String
     var outDir: String
     var onlyCached: Bool
+    /// In seconds. Ending the worker from inside means a worker the app can no
+    /// longer reach still stops.
+    var cpuLimit: Int
 
     enum CodingKeys: String, CodingKey {
         case entry, source
         case outDir = "out_dir"
         case onlyCached = "only_cached"
+        case cpuLimit = "cpu_limit_s"
     }
 }
 
 enum WorkerResponse: Decodable {
     case ok(log: String, durationMs: Int)
     case err(message: String, log: String, missingFile: String?, absentFile: String?, durationMs: Int)
+    /// Ended before it answered; never decoded, the worker has no say in it.
+    case stopped(WorkerJob.Stop)
 
     enum CodingKeys: String, CodingKey {
         case status, log, message
@@ -230,17 +335,19 @@ private let fetchPrefix = "scribex-fetch\t"
 
 extension Typesetter {
     static func run(
-        _ worker: URL, _ request: WorkerRequest, onFetch: @escaping @Sendable (String) -> Void
+        _ worker: URL, _ request: WorkerRequest, job: WorkerJob, wallLimit: Int?,
+        onFetch: @escaping @Sendable (String) -> Void
     ) async -> WorkerResponse {
         await withCheckedContinuation { done in
             DispatchQueue.global(qos: .userInitiated).async {
-                done.resume(returning: runBlocking(worker, request, onFetch: onFetch))
+                done.resume(returning: runBlocking(worker, request, job: job, wallLimit: wallLimit, onFetch: onFetch))
             }
         }
     }
 
     private static func runBlocking(
-        _ worker: URL, _ request: WorkerRequest, onFetch: @escaping @Sendable (String) -> Void
+        _ worker: URL, _ request: WorkerRequest, job: WorkerJob, wallLimit: Int?,
+        onFetch: @escaping @Sendable (String) -> Void
     ) -> WorkerResponse {
         let process = Process()
         process.executableURL = worker
@@ -253,6 +360,13 @@ extension Typesetter {
         } catch {
             return .failure("cannot start worker: \(error.localizedDescription)")
         }
+        job.started(process)
+        let deadline = wallLimit.map { seconds in
+            let stop = DispatchWorkItem { job.stop(.timedOut(seconds: seconds)) }
+            DispatchQueue.global().asyncAfter(deadline: .now() + .seconds(seconds), execute: stop)
+            return stop
+        }
+        defer { deadline?.cancel() }
 
         // Drained on its own thread so progress arrives while the job runs, and
         // so a chatty engine can never block on a full pipe.
@@ -277,6 +391,12 @@ extension Typesetter {
         progress.wait()
 
         if out.isEmpty {
+            if let stop = job.stopped {
+                return .stopped(stop)
+            }
+            if process.terminationReason == .uncaughtSignal, process.terminationStatus == SIGXCPU {
+                return .stopped(.timedOut(seconds: request.cpuLimit))
+            }
             // The engine aborted or was killed: what the worker process is for.
             let status = process.terminationReason == .uncaughtSignal
                 ? "signal: \(process.terminationStatus)"
