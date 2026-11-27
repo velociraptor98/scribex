@@ -1,5 +1,7 @@
 # Offline behaviour
 
+[Overview](../README.md) · [Development](DEVELOPMENT.md) · **Offline behaviour**
+
 ScribeX typesets with [Tectonic](https://tectonic-typesetting.github.io/) linked
 directly into the app. There is no TeX Live installation, no `pdflatex` on
 `PATH`, and no server. What there *is* is a resource cache, and understanding it
