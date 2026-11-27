@@ -14,7 +14,7 @@ use std::path::{Component, Path, PathBuf};
 use tectonic::config::PersistentConfig;
 use tectonic::driver::{OutputFormat, ProcessingSessionBuilder};
 use tectonic::io::memory::MemoryFileCollection;
-use tectonic::status::{NoopStatusBackend, StatusBackend};
+use tectonic::status::{MessageKind, NoopStatusBackend, StatusBackend};
 
 pub struct CompileOk {
     pub log: String,
@@ -34,12 +34,25 @@ pub struct CompileErr {
 
 /// Identify a resource absent from the offline cache.
 ///
-/// Two distinct shapes matter, and both are common on a cold cache:
+/// xdvipdfmx writes nothing to the log; it names a font it could not load only
+/// in a warning, then aborts with a message that names none:
+///   `Could not locate a virtual/physical font for TFM "cmmi5".`
+/// The math fonts at 5pt, for scripts within scripts, are the usual case.
+///
+/// In the log, two distinct shapes matter, and both are common on a cold cache:
 ///   `! LaTeX Error: File `tikz.sty' not found.`
 ///   `! Font TU/lmr/m/n/17.28=[lmroman17-regular]:... not loadable: Metric
 ///    (TFM) file or installed font not found.`
 /// The font form carries no backtick-quoted name, so it needs its own rule.
-fn missing_file_from_log(log: &str) -> Option<String> {
+fn missing_file_from(warnings: &str, log: &str) -> Option<String> {
+    if let Some((_, rest)) = warnings.split_once("physical font for TFM \"") {
+        if let Some((name, _)) = rest.split_once('"') {
+            if !name.is_empty() && name.len() < 120 {
+                return Some(name.to_string());
+            }
+        }
+    }
+
     // TeX hard-wraps the log at ~79 columns, so a single diagnostic is often
     // split mid-word. Join first, then match.
     let joined = log.replace("\n", "");
@@ -165,6 +178,32 @@ fn write_outputs(files: &MemoryFileCollection, out_dir: &Path) -> Result<(), Str
     Ok(())
 }
 
+/// Passes every report on, keeping the warnings: the only place xdvipdfmx
+/// says which font it lacked.
+struct Recorder<'a> {
+    inner: &'a mut dyn StatusBackend,
+    warnings: String,
+}
+
+impl StatusBackend for Recorder<'_> {
+    fn report(
+        &mut self,
+        kind: MessageKind,
+        args: std::fmt::Arguments,
+        err: Option<&tectonic::Error>,
+    ) {
+        if kind == MessageKind::Warning {
+            self.warnings.push_str(&args.to_string());
+            self.warnings.push('\n');
+        }
+        self.inner.report(kind, args, err);
+    }
+
+    fn dump_error_logs(&mut self, output: &[u8]) {
+        self.inner.dump_error_logs(output);
+    }
+}
+
 /// Typeset `source` as if it were the file at `entry`, without touching that
 /// file. `entry`'s directory is still the filesystem root, so `\input`,
 /// `\includegraphics` and friends resolve against the real project on disk.
@@ -180,8 +219,8 @@ pub fn compile(
     let started = std::time::Instant::now();
     let ms = |t: std::time::Instant| t.elapsed().as_millis() as u64;
 
-    let fail = |msg: String, log: String| {
-        let (missing_file, absent_file) = classify_missing(missing_file_from_log(&log));
+    let fail_with = |msg: String, log: String, warnings: &str| {
+        let (missing_file, absent_file) = classify_missing(missing_file_from(warnings, &log));
         CompileErr {
             missing_file,
             absent_file,
@@ -190,6 +229,7 @@ pub fn compile(
             duration_ms: ms(started),
         }
     };
+    let fail = |msg: String, log: String| fail_with(msg, log, "");
 
     let root = entry.parent().unwrap_or(Path::new("."));
     let name = entry
@@ -231,15 +271,20 @@ pub fn compile(
             .unwrap_or_default()
     };
 
+    let mut status = Recorder {
+        inner: status,
+        warnings: String::new(),
+    };
     let mut sess = sb
-        .create(status)
+        .create(&mut status)
         .map_err(|e| fail(format!("session: {e}"), String::new()))?;
 
-    let run = sess.run(status);
+    let run = sess.run(&mut status);
     let files = sess.into_file_data();
     let log = log_of(&files);
     if let Err(e) = run {
-        return Err(fail(e.to_string(), log));
+        // The alternate form adds the engine's own message to its name.
+        return Err(fail_with(format!("{e:#}"), log, &status.warnings));
     }
 
     if !files.contains_key(&format!("{stem}.pdf")) {
@@ -266,7 +311,7 @@ pub const WARMUP: &str = r#"\documentclass{article}
 \subsection{Math}
 \begin{equation}\int_{-\infty}^{\infty} e^{-x^2}\,dx=\sqrt{\pi}\end{equation}
 \begin{align}a &= b \\ c &= d\end{align}
-$\mathbb{R}\ \mathcal{L}\ \mathfrak{g}\ \alpha\beta\gamma$
+$\mathbb{R}\ \mathcal{L}\ \mathfrak{g}\ \alpha\beta\gamma\ \frac{a^{-1}}{b}$
 \begin{itemize}\item one\end{itemize}
 \begin{enumerate}\item one\end{enumerate}
 \begin{tabular}{ll}\toprule a & b \\ \bottomrule\end{tabular}
@@ -365,5 +410,12 @@ mod tests {
         assert!(ensure_real_dir(&dir.join(".scribex-build")).is_err());
         assert!(ensure_real_dir(&dir.join("fresh")).is_ok());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn missing_font_is_named_from_xdvipdfmx_warning() {
+        let warnings = "Could not locate a virtual/physical font for TFM \"cmmi5\".\n";
+        assert_eq!(missing_file_from(warnings, ""), Some("cmmi5".to_string()));
+        assert_eq!(missing_file_from("", ""), None);
     }
 }
