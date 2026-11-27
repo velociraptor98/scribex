@@ -1,6 +1,6 @@
 [package]
 name = "scribex-engine"
-version = "0.0.6-alpha"
+version = "0.0.7-alpha"
 description = "Tectonic typesetting for ScribeX, run in a crash-isolated worker process"
 authors = ["Kunal Singh"]
 edition = "2021"
