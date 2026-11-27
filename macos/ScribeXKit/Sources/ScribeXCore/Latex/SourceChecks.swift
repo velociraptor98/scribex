@@ -121,15 +121,29 @@ private func scanBody(_ code: String, from open: String.Index) -> Body? {
 /// line break is not equal to `"\n"`.
 private func withoutComments(_ source: String) -> String {
     source.components(separatedBy: "\n").map { line in
-        var escaped = false
-        for (n, c) in line.enumerated() {
-            if escaped {
-                escaped = false
-            } else if c == "\\" {
-                escaped = true
-            } else if c == "%" {
+        let chars = Array(line)
+        var n = 0
+        while n < chars.count {
+            if chars[n] == "\\" {
+                // `\verb|…|` is literal: skip to its closing delimiter.
+                let verb = Array("verb")
+                if Array(chars[(n + 1)...].prefix(4)) == verb {
+                    var k = n + 5
+                    if k < chars.count, chars[k] == "*" { k += 1 }
+                    if k < chars.count, !chars[k].isLetter {
+                        let delimiter = chars[k]
+                        k += 1
+                        while k < chars.count, chars[k] != delimiter { k += 1 }
+                        n = k + 1
+                        continue
+                    }
+                }
+                n += 2
+            } else if chars[n] == "%" {
                 let cr = line.hasSuffix("\r") ? "\r" : ""
-                return String(line.prefix(n)) + String(repeating: " ", count: line.count - n - cr.count) + cr
+                return String(chars[..<n]) + String(repeating: " ", count: chars.count - n - cr.count) + cr
+            } else {
+                n += 1
             }
         }
         return line

@@ -20,7 +20,7 @@ public func latexTokens(in text: NSString, range: NSRange, _ found: (NSRange, La
     func isLetter(_ c: unichar) -> Bool { (c >= 65 && c <= 90) || (c >= 97 && c <= 122) }
     let newline: unichar = 10, backslash: unichar = 92, percent: unichar = 37, dollar: unichar = 36
     let openBrace: unichar = 123, closeBrace: unichar = 125, openBracket: unichar = 91, closeBracket: unichar = 93
-    let openParen: unichar = 40, closeParen: unichar = 41, space: unichar = 32, tab: unichar = 9
+    let openParen: unichar = 40, closeParen: unichar = 41, space: unichar = 32, tab: unichar = 9, star: unichar = 42
 
     while i < end {
         let c = text.character(at: i)
@@ -52,6 +52,17 @@ public func latexTokens(in text: NSString, range: NSRange, _ found: (NSRange, La
                             close += 1
                         }
                         i = close
+                    }
+                } else if name == "verb" {
+                    // `\verb|…|` and `\verb*|…|`: the text up to the closing
+                    // delimiter is literal, so a `%` there starts no comment.
+                    var k = i
+                    if at(k) == star { k += 1 }
+                    let delimiter = at(k)
+                    if delimiter != 0 && delimiter != newline {
+                        var close = k + 1
+                        while close < end, at(close) != delimiter, at(close) != newline { close += 1 }
+                        i = at(close) == delimiter ? close + 1 : close
                     }
                 }
             } else if next == openBracket || next == closeBracket || next == openParen || next == closeParen {

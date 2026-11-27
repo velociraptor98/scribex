@@ -37,6 +37,11 @@ struct SourceChecksTests {
         }
     }
 
+    @Test func aPercentInVerbDoesNotHideTheRestOfTheLine() {
+        let source = Self.document("\\verb|%| \\renewcommand{\\vec}[1]{\\vec{#1}}")
+        #expect(sourceIssues(source).count == 1)
+    }
+
     @Test func aNewCommandHasNothingToKeep() {
         let d = sourceIssues(Self.document("\\newcommand{\\R}{\\R^n}"))[0]
         #expect(d.fixes.isEmpty)

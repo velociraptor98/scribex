@@ -55,4 +55,14 @@ struct LatexTests {
         #expect(found.map(\.0) == ["\\begin", "{", "equation", "}", "$", "$", "% note", "\\{", "\\["])
         #expect(found.map(\.1) == [.command, .bracket, .environment, .bracket, .math, .math, .comment, .command, .math])
     }
+
+    @Test func percentInVerbIsNotAComment() {
+        let text = "\\verb|%x| \\verb*+%y+ % note" as NSString
+        var found: [(String, LatexToken)] = []
+        latexTokens(in: text, range: NSRange(location: 0, length: text.length)) { range, kind in
+            found.append((text.substring(with: range), kind))
+        }
+
+        #expect(found.map(\.0) == ["\\verb", "\\verb", "% note"])
+    }
 }
